@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+.DS_Store
+.superstack/
+docs/
+node_modules/
+target/
+coverage/
+dist/
+deployments/*.local.json
+deployments/*.keypair.json
+deployments/jupiter-live-market.json
+.local-ledger/
+vendor/*/target/

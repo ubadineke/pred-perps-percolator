@@ -1,0 +1,17 @@
+[package]
+name = "moxie-oracle"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[features]
+default = []
+no-entrypoint = []
+
+[dependencies]
+percolator-prog = { path = "../../vendor/percolator-prog", default-features = false, features = ["no-entrypoint"] }
+solana-program = "1.18.26"
+

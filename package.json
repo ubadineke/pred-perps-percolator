@@ -1,0 +1,27 @@
+{
+  "name": "moxie-prediction-perps",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "test": "pnpm run test:unit && pnpm run test:integration && pnpm run test:adversarial",
+    "test:unit": "node --test packages/provider-adapter/test/*.test.ts packages/market-catalog/test/*.test.ts packages/config/test/*.test.ts packages/sdk/test/*.test.ts services/oracle-reporter/test/*.test.ts",
+    "test:integration": "node --test tests/integration/*.test.ts",
+    "test:adversarial": "node --test tests/adversarial/*.test.ts",
+    "deploy:local": "node scripts/deploy-local.mjs",
+    "verify:local": "node scripts/verify-local.mjs",
+    "smoke:jupiter": "node --env-file=.env --experimental-strip-types scripts/smoke-jupiter.mjs",
+    "deploy:local:live": "pnpm run smoke:jupiter && node scripts/deploy-local.mjs --live",
+    "deploy:devnet": "node scripts/not-implemented.mjs deploy:devnet 'Phase 12: devnet deployment'",
+    "seed:demo": "node scripts/not-implemented.mjs seed:demo 'Phase 12: demo seeding'",
+    "demo:liquidation": "node scripts/not-implemented.mjs demo:liquidation 'Phase 11: liquidation scenario'",
+    "demo:resolution": "node scripts/not-implemented.mjs demo:resolution 'Phase 11: resolution scenario'",
+    "proof:export": "node scripts/not-implemented.mjs proof:export 'Phase 15: proof manifest'",
+    "verify:upstream": "node scripts/verify-upstream.mjs",
+    "config:market-group": "node scripts/print-market-group.mjs"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "cluster": "devnet",
+  "rpcUrl": "https://api.devnet.solana.com",
+  "percolatorProgramId": null,
+  "matcherProgramId": null,
+  "oracleProgramId": null,
+  "usdcMint": null,
+  "marketAccount": null,
+  "marketAuthority": null
+}

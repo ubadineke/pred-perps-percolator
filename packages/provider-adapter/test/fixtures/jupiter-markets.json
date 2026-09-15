@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "eventId": "sol-weekly",
+      "markets": [{
+      "marketId": "jup-sol-250-friday",
+      "status": "open",
+      "openTime": 1789344000,
+      "closeTime": 1790208000,
+      "resolveAt": 1790211600,
+      "metadata": {
+        "title": "Will SOL close above $250 on Friday?",
+        "status": "open",
+        "rulesPrimary": "Resolves YES if the referenced SOL/USD close is strictly above $250.",
+        "rulesSecondary": "The provider's published result is final."
+      },
+      "pricing": {
+        "buyYesPriceUsd": 580000,
+        "sellYesPriceUsd": 550000,
+        "buyNoPriceUsd": 450000,
+        "sellNoPriceUsd": 420000,
+        "volume": 24137.52,
+        "liquidity": 9321.11
+      }}]
+    },
+    {
+      "eventId": "weak-event",
+      "markets": [{
+      "marketId": "jup-stale-market",
+      "status": "open",
+      "closeTime": 1790208000,
+      "metadata": {
+        "title": "Market missing rules",
+        "status": "open"
+      },
+      "pricing": {
+        "buyYesPriceUsd": 800000,
+        "sellYesPriceUsd": 500000,
+        "volume": 2
+      }}]
+    }
+  ]
+}

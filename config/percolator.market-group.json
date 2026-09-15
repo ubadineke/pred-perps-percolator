@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "name": "moxie-jupiter-binary-v1",
+  "quote": {
+    "symbol": "USDC",
+    "decimals": 6,
+    "mint": null
+  },
+  "portfolio": {
+    "maxAssets": 8,
+    "onePerOwner": true
+  },
+  "activation": {
+    "mode": "admin-allowlist",
+    "provider": "jupiter"
+  },
+  "price": {
+    "decimals": 6,
+    "minimumE6": 1,
+    "maximumE6": 999999,
+    "initialE6": 500000
+  },
+  "risk": {
+    "maintenanceMarginBps": 10000,
+    "initialMarginBps": 10000,
+    "maxTradingFeeBps": 10000,
+    "tradeFeeBaseBps": 30,
+    "liquidationFeeBps": 0,
+    "maxPriceMoveBpsPerSlot": 10000
+  }
+}
