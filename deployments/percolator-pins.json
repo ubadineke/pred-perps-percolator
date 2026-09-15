@@ -1,0 +1,28 @@
+{
+  "repositories": [
+    {
+      "name": "percolator",
+      "path": "vendor/percolator",
+      "repository": "https://github.com/aeyakovenko/percolator.git",
+      "commit": "394fd0bf2cb7d73df425eb3754dc3be1a0c44336",
+      "reason": "Exact engine revision consumed by the pinned wrapper"
+    },
+    {
+      "name": "percolator-prog",
+      "path": "vendor/percolator-prog",
+      "repository": "https://github.com/ubadineke/percolator-prog.git",
+      "commit": "4b974f15930d997ec91a7065bbc00955261c1cc4",
+      "upstreamRepository": "https://github.com/aeyakovenko/percolator-prog.git",
+      "upstreamCommit": "2b1d025c004f92d3f89bac00113be90a0cbbcf63",
+      "reason": "Minimal Moxie wrapper patch: consume the pinned sibling Percolator engine"
+    }
+  ],
+  "references": [
+    {
+      "name": "percolator-match",
+      "repository": "https://github.com/aeyakovenko/percolator-match.git",
+      "commit": "60aac3a996d0264c47fbefe9a2625d6ee6fb6a47",
+      "reason": "Matcher ABI reference only; Moxie deploys programs/moxie-matcher"
+    }
+  ]
+}
