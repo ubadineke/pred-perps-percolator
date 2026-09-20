@@ -1052,9 +1052,14 @@ dependencies = [
 name = "moxie-oracle"
 version = "0.1.0"
 dependencies = [
+ "moxie-probability-math",
  "percolator-prog",
  "solana-program 1.18.26",
 ]
+
+[[package]]
+name = "moxie-probability-math"
+version = "0.1.0"
 
 [[package]]
 name = "num"

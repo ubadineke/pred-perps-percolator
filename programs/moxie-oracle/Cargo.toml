@@ -12,6 +12,6 @@ default = []
 no-entrypoint = []
 
 [dependencies]
+moxie-probability-math = { path = "../../crates/probability-math" }
 percolator-prog = { path = "../../vendor/percolator-prog", default-features = false, features = ["no-entrypoint"] }
 solana-program = "1.18.26"
-

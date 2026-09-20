@@ -949,8 +949,13 @@ dependencies = [
 name = "moxie-matcher"
 version = "0.1.0"
 dependencies = [
+ "moxie-probability-math",
  "solana-program",
 ]
+
+[[package]]
+name = "moxie-probability-math"
+version = "0.1.0"
 
 [[package]]
 name = "num-bigint"

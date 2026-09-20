@@ -36,7 +36,11 @@ assert(deployment.importedMarkets.length === 1, "expected one proven imported pe
 for (const imported of deployment.importedMarkets) {
   const record = account(imported.record);
   assert(record.account.owner === deployment.oracleProgramId, `import record owner mismatch for ${imported.providerMarketId}`);
-  assert(record.account.space === 288, `import record size mismatch for ${imported.providerMarketId}`);
+  assert(record.account.space === 344, `import record size mismatch for ${imported.providerMarketId}`);
+  const bytes = Buffer.from(record.account.data[0], "base64");
+  assert(Number(bytes.readBigUInt64LE(272)) === 2, `pricing observation sequence missing for ${imported.providerMarketId}`);
+  assert(Number(bytes.readBigUInt64LE(288)) === imported.initialMarkE6, `guarded index mismatch for ${imported.providerMarketId}`);
+  assert(bytes[336] === 1, `oracle health is not healthy for ${imported.providerMarketId}`);
 }
 
 const mint = account(deployment.usdcMint);
@@ -68,6 +72,7 @@ console.log(`ok Percolator program ${deployment.percolatorProgramId}`);
 console.log(`ok matcher program ${deployment.matcherProgramId}`);
 console.log(`ok oracle program ${deployment.oracleProgramId}`);
 console.log(`ok immutable provider-market binding in ${deployment.oracleConfig}`);
+console.log("ok authenticated depth/index inputs produced an on-chain guarded mark");
 console.log(`ok market ${deployment.marketAccount} (${market.account.space} bytes)`);
 console.log(`ok mock USDC mint ${deployment.usdcMint}`);
 console.log(`ok collateral vault ${deployment.collateralVault}`);

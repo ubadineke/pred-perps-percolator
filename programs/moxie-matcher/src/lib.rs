@@ -1,6 +1,7 @@
 #![no_std]
 extern crate alloc;
 use alloc::format;
+use moxie_probability_math::{valid_live_price, BPS_SCALE};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     clock::Clock,
@@ -19,12 +20,15 @@ const PRICE_MAX: u64 = 1_000_000;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Config {
     pub delegate: Pubkey,
-    pub base_spread_bps: u32,
-    pub max_total_bps: u32,
-    pub impact_bps: u32,
-    pub inventory_skew_bps: u32,
-    pub oracle_health_bps: u32,
-    pub hedge_cost_bps: u32,
+    pub base_spread_e6: u32,
+    pub max_total_adjustment_e6: u32,
+    pub size_coefficient_e6: u32,
+    pub skew_coefficient_e6: u32,
+    pub oracle_health_charge_e6: u32,
+    pub divergence_charge_e6: u32,
+    pub lock_charge_e6: u32,
+    pub hedge_charge_e6: u32,
+    pub epsilon_e6: u32,
     pub expiry_slot: u64,
     pub liquidity_notional_e6: u128,
     pub max_fill_abs: u128,
@@ -56,6 +60,7 @@ pub fn process_instruction(
         Some(0) => process_match(program_id, accounts, data),
         Some(2) => process_initialize(program_id, accounts, data),
         Some(4) => process_pause(program_id, accounts, data),
+        Some(5) => process_initialize_v2(program_id, accounts, data),
         _ => Err(ProgramError::InvalidInstructionData),
     }
 }
@@ -94,16 +99,79 @@ fn process_initialize(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]
     }
     let cfg = Config {
         delegate: *delegate.key,
-        base_spread_bps: read_u32(data, 1)?,
-        max_total_bps: read_u32(data, 5)?,
-        impact_bps: read_u32(data, 9)?,
-        inventory_skew_bps: read_u32(data, 13)?,
-        oracle_health_bps: read_u32(data, 17)?,
-        hedge_cost_bps: read_u32(data, 21)?,
+        // Legacy initializer retained for existing clients. Its historic bps
+        // values are conservatively converted to absolute probability e6.
+        base_spread_e6: bps_to_e6(read_u32(data, 1)?)?,
+        max_total_adjustment_e6: bps_to_e6(read_u32(data, 5)?)?,
+        size_coefficient_e6: bps_to_e6(read_u32(data, 9)?)?,
+        skew_coefficient_e6: bps_to_e6(read_u32(data, 13)?)?,
+        oracle_health_charge_e6: bps_to_e6(read_u32(data, 17)?)?,
+        divergence_charge_e6: 0,
+        lock_charge_e6: 0,
+        hedge_charge_e6: bps_to_e6(read_u32(data, 21)?)?,
+        epsilon_e6: 1,
         expiry_slot: read_u64(data, 25)?,
         liquidity_notional_e6: read_u128(data, 33)?,
         max_fill_abs: read_u128(data, 49)?,
         max_inventory_abs: read_u128(data, 65)?,
+        inventory_base: 0,
+        paused: false,
+    };
+    validate_config(&cfg)?;
+    write_config(&mut bytes, &cfg)
+}
+
+fn process_initialize_v2(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    data: &[u8],
+) -> ProgramResult {
+    if data.len() != 93 {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+    let mut it = accounts.iter();
+    let owner = next_account_info(&mut it)?;
+    let delegate = next_account_info(&mut it)?;
+    let context = next_account_info(&mut it)?;
+    let percolator = next_account_info(&mut it)?;
+    let market = next_account_info(&mut it)?;
+    let portfolio = next_account_info(&mut it)?;
+    if !owner.is_signer || !context.is_writable || context.owner != program_id {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    let (expected, _) = Pubkey::find_program_address(
+        &[
+            b"matcher",
+            market.key.as_ref(),
+            portfolio.key.as_ref(),
+            owner.key.as_ref(),
+            program_id.as_ref(),
+            context.key.as_ref(),
+        ],
+        percolator.key,
+    );
+    if expected != *delegate.key {
+        return Err(ProgramError::InvalidSeeds);
+    }
+    let mut bytes = context.try_borrow_mut_data()?;
+    if bytes.len() != CONTEXT_LEN || read_u64(&bytes, STATE)? != 0 {
+        return Err(ProgramError::AccountAlreadyInitialized);
+    }
+    let cfg = Config {
+        delegate: *delegate.key,
+        base_spread_e6: read_u32(data, 1)?,
+        max_total_adjustment_e6: read_u32(data, 5)?,
+        size_coefficient_e6: read_u32(data, 9)?,
+        skew_coefficient_e6: read_u32(data, 13)?,
+        oracle_health_charge_e6: read_u32(data, 17)?,
+        divergence_charge_e6: read_u32(data, 21)?,
+        lock_charge_e6: read_u32(data, 25)?,
+        hedge_charge_e6: read_u32(data, 29)?,
+        expiry_slot: read_u64(data, 33)?,
+        liquidity_notional_e6: read_u128(data, 41)?,
+        max_fill_abs: read_u128(data, 57)?,
+        max_inventory_abs: read_u128(data, 73)?,
+        epsilon_e6: read_u32(data, 89)?,
         inventory_base: 0,
         paused: false,
     };
@@ -150,7 +218,11 @@ fn process_pause(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> 
 
 /// Deterministic full-fill-or-reject quote. Percolator enforces the signed user limit.
 pub fn quote(c: &Config, oracle: u64, requested: i128, slot: u64) -> Option<Quote> {
-    if c.paused || slot > c.expiry_slot || oracle == 0 || oracle >= PRICE_MAX || requested == 0 {
+    if c.paused
+        || slot > c.expiry_slot
+        || !valid_live_price(oracle, u64::from(c.epsilon_e6))
+        || requested == 0
+    {
         return None;
     }
     let abs = requested.unsigned_abs();
@@ -161,46 +233,54 @@ pub fn quote(c: &Config, oracle: u64, requested: i128, slot: u64) -> Option<Quot
     if next.unsigned_abs() > c.max_inventory_abs {
         return None;
     }
-    let notional = abs
-        .checked_mul(oracle as u128)?
-        .checked_div(PRICE_MAX as u128)?;
-    let impact = notional
-        .checked_mul(c.impact_bps as u128)?
-        .checked_div(c.liquidity_notional_e6)? as u64;
-    let skew = c
-        .inventory_base
-        .unsigned_abs()
-        .checked_mul(c.inventory_skew_bps as u128)?
-        .checked_div(c.max_inventory_abs)? as u64;
-    let fixed = c.base_spread_bps as u64 + c.oracle_health_bps as u64 + c.hedge_cost_bps as u64;
-    let signed_skew = if requested > 0 {
-        -(c.inventory_base.signum() as i64) * skew as i64
-    } else {
-        (c.inventory_base.signum() as i64) * skew as i64
-    };
-    let total = ((fixed + impact).min(c.max_total_bps as u64) as i64 + signed_skew)
-        .clamp(0, c.max_total_bps as i64) as u128;
-    let adjustment = (oracle as u128)
-        .checked_mul(total)?
-        .checked_add(9_999)?
-        .checked_div(10_000)?;
-    let price = if requested > 0 {
-        (oracle as u128).checked_add(adjustment)?
-    } else {
-        (oracle as u128).checked_sub(adjustment)?
-    };
-    if price == 0 || price >= PRICE_MAX as u128 {
-        return None;
-    }
+    let capacity = c.max_inventory_abs;
+    let user_exposure_before = c.inventory_base.checked_neg()?;
+    let twice_average_exposure = user_exposure_before
+        .checked_mul(2)?
+        .checked_add(requested)?;
+    let inventory_adjustment = twice_average_exposure
+        .checked_mul(i128::from(c.skew_coefficient_e6))?
+        .checked_div(i128::try_from(capacity.checked_mul(2)?).ok()?)?;
+    let size_adjustment = abs
+        .checked_mul(u128::from(c.size_coefficient_e6))?
+        .checked_add(capacity.checked_sub(1)?)?
+        .checked_div(capacity)?;
+    let fixed = u128::from(c.base_spread_e6)
+        .checked_add(u128::from(c.oracle_health_charge_e6))?
+        .checked_add(u128::from(c.divergence_charge_e6))?
+        .checked_add(u128::from(c.lock_charge_e6))?
+        .checked_add(u128::from(c.hedge_charge_e6))?;
+    let side = requested.signum();
+    let side_adjustment = i128::try_from(fixed.checked_add(size_adjustment)?)
+        .ok()?
+        .checked_mul(side)?;
+    let raw_adjustment = inventory_adjustment.checked_add(side_adjustment)?;
+    let bounded_adjustment = raw_adjustment.clamp(
+        -i128::from(c.max_total_adjustment_e6),
+        i128::from(c.max_total_adjustment_e6),
+    );
+    let raw_price = i128::from(oracle).checked_add(bounded_adjustment)?;
+    let lower = i128::from(c.epsilon_e6);
+    let upper = i128::from(PRICE_MAX.checked_sub(u64::from(c.epsilon_e6))?);
+    let price = u64::try_from(raw_price.clamp(lower, upper)).ok()?;
     Some(Quote {
-        exec_price_e6: price as u64,
+        exec_price_e6: price,
         exec_size: requested,
         next_inventory: next,
     })
 }
 fn validate_config(c: &Config) -> ProgramResult {
-    if c.max_total_bps > 10_000
-        || c.base_spread_bps > c.max_total_bps
+    let fixed = u64::from(c.base_spread_e6)
+        + u64::from(c.oracle_health_charge_e6)
+        + u64::from(c.divergence_charge_e6)
+        + u64::from(c.lock_charge_e6)
+        + u64::from(c.hedge_charge_e6);
+    if c.epsilon_e6 == 0
+        || u64::from(c.epsilon_e6) >= PRICE_MAX / 2
+        || c.max_total_adjustment_e6 == 0
+        || u64::from(c.max_total_adjustment_e6) >= PRICE_MAX / 2
+        || u64::from(c.base_spread_e6) > u64::from(c.max_total_adjustment_e6)
+        || fixed > u64::from(c.max_total_adjustment_e6)
         || c.liquidity_notional_e6 == 0
         || c.max_fill_abs == 0
         || c.max_inventory_abs == 0
@@ -209,6 +289,14 @@ fn validate_config(c: &Config) -> ProgramResult {
     } else {
         Ok(())
     }
+}
+
+fn bps_to_e6(bps: u32) -> Result<u32, ProgramError> {
+    u64::from(bps)
+        .checked_mul(PRICE_MAX)
+        .and_then(|value| value.checked_div(BPS_SCALE))
+        .and_then(|value| u32::try_from(value).ok())
+        .ok_or(ProgramError::InvalidArgument)
 }
 fn parse_call(d: &[u8]) -> Result<Call, ProgramError> {
     if d.len() != 67 || d[0] != 0 || d[43..].iter().any(|b| *b != 0) {
@@ -244,12 +332,15 @@ fn write_config(d: &mut [u8], c: &Config) -> ProgramResult {
     d[STATE + 8] = c.paused as u8;
     d[STATE + 16..STATE + 48].copy_from_slice(c.delegate.as_ref());
     for (o, v) in [
-        (48, c.base_spread_bps),
-        (52, c.max_total_bps),
-        (56, c.impact_bps),
-        (60, c.inventory_skew_bps),
-        (64, c.oracle_health_bps),
-        (68, c.hedge_cost_bps),
+        (48, c.base_spread_e6),
+        (52, c.max_total_adjustment_e6),
+        (56, c.size_coefficient_e6),
+        (60, c.skew_coefficient_e6),
+        (64, c.oracle_health_charge_e6),
+        (68, c.hedge_charge_e6),
+        (144, c.divergence_charge_e6),
+        (148, c.lock_charge_e6),
+        (152, c.epsilon_e6),
     ] {
         d[STATE + o..STATE + o + 4].copy_from_slice(&v.to_le_bytes())
     }
@@ -267,17 +358,20 @@ fn read_config(d: &[u8]) -> Result<Config, ProgramError> {
     Ok(Config {
         paused: d[STATE + 8] != 0,
         delegate: Pubkey::new_from_array(d[STATE + 16..STATE + 48].try_into().unwrap()),
-        base_spread_bps: read_u32(d, STATE + 48)?,
-        max_total_bps: read_u32(d, STATE + 52)?,
-        impact_bps: read_u32(d, STATE + 56)?,
-        inventory_skew_bps: read_u32(d, STATE + 60)?,
-        oracle_health_bps: read_u32(d, STATE + 64)?,
-        hedge_cost_bps: read_u32(d, STATE + 68)?,
+        base_spread_e6: read_u32(d, STATE + 48)?,
+        max_total_adjustment_e6: read_u32(d, STATE + 52)?,
+        size_coefficient_e6: read_u32(d, STATE + 56)?,
+        skew_coefficient_e6: read_u32(d, STATE + 60)?,
+        oracle_health_charge_e6: read_u32(d, STATE + 64)?,
+        hedge_charge_e6: read_u32(d, STATE + 68)?,
         expiry_slot: read_u64(d, STATE + 72)?,
         liquidity_notional_e6: read_u128(d, STATE + 80)?,
         max_fill_abs: read_u128(d, STATE + 96)?,
         max_inventory_abs: read_u128(d, STATE + 112)?,
         inventory_base: read_i128(d, STATE + 128)?,
+        divergence_charge_e6: read_u32(d, STATE + 144)?,
+        lock_charge_e6: read_u32(d, STATE + 148)?,
+        epsilon_e6: read_u32(d, STATE + 152)?,
     })
 }
 fn read_u16(d: &[u8], o: usize) -> Result<u16, ProgramError> {
@@ -327,12 +421,15 @@ mod tests {
     fn c() -> Config {
         Config {
             delegate: Pubkey::new_unique(),
-            base_spread_bps: 30,
-            max_total_bps: 500,
-            impact_bps: 100,
-            inventory_skew_bps: 80,
-            oracle_health_bps: 10,
-            hedge_cost_bps: 10,
+            base_spread_e6: 3_000,
+            max_total_adjustment_e6: 100_000,
+            size_coefficient_e6: 10_000,
+            skew_coefficient_e6: 80_000,
+            oracle_health_charge_e6: 1_000,
+            divergence_charge_e6: 2_000,
+            lock_charge_e6: 0,
+            hedge_charge_e6: 1_000,
+            epsilon_e6: 1_000,
             expiry_slot: 100,
             liquidity_notional_e6: 1_000_000,
             max_fill_abs: 2_000_000,
@@ -363,5 +460,30 @@ mod tests {
         let mut x = c();
         x.inventory_base = -2_000_000;
         assert!(quote(&x, 500_000, -1_000_000, 1).unwrap().exec_price_e6 > n.exec_price_e6)
+    }
+    #[test]
+    fn larger_orders_have_worse_prices() {
+        let small_buy = quote(&c(), 500_000, 100_000, 1).unwrap();
+        let large_buy = quote(&c(), 500_000, 1_000_000, 1).unwrap();
+        let small_sell = quote(&c(), 500_000, -100_000, 1).unwrap();
+        let large_sell = quote(&c(), 500_000, -1_000_000, 1).unwrap();
+        assert!(large_buy.exec_price_e6 > small_buy.exec_price_e6);
+        assert!(large_sell.exec_price_e6 < small_sell.exec_price_e6);
+    }
+    #[test]
+    fn live_bounds_and_overflow_fail_closed() {
+        assert_eq!(
+            quote(&c(), 1_000, -2_000_000, 1).unwrap().exec_price_e6,
+            1_000
+        );
+        assert_eq!(
+            quote(&c(), 999_000, 2_000_000, 1).unwrap().exec_price_e6,
+            999_000
+        );
+        assert!(quote(&c(), 999, 1, 1).is_none());
+        let mut x = c();
+        x.max_inventory_abs = u128::MAX;
+        x.inventory_base = i128::MIN;
+        assert!(quote(&x, 500_000, 1, 1).is_none());
     }
 }

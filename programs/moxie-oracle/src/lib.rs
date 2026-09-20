@@ -3,6 +3,7 @@
 extern crate alloc;
 
 use alloc::{format, vec, vec::Vec};
+use moxie_probability_math::{compute_mark, valid_live_price, MarkPolicy, OracleHealth};
 use percolator_prog::{ix::Instruction as PercolatorInstruction, processor::ASSET_ACTION_ACTIVATE};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -20,8 +21,8 @@ use solana_program::{
 
 const CONFIG_MAGIC: u64 = 0x4d4f_5849_4543_4647;
 const RECORD_MAGIC: u64 = 0x4d4f_5849_454d_4b54;
-pub const CONFIG_LEN: usize = 160;
-pub const RECORD_LEN: usize = 288;
+pub const CONFIG_LEN: usize = 200;
+pub const RECORD_LEN: usize = 344;
 pub const CONFIG_SEED: &[u8] = b"config";
 pub const MARKET_SEED: &[u8] = b"imported";
 const MAX_FUTURE_SKEW_SECS: i64 = 5;
@@ -53,6 +54,8 @@ pub struct Config {
     pub percolator_program: Pubkey,
     pub market_group: Pubkey,
     pub max_observation_age_secs: u64,
+    pub mark_policy: MarkPolicy,
+    pub max_source_spread_e6: u64,
 }
 
 impl Config {
@@ -67,6 +70,14 @@ impl Config {
             percolator_program: read_pubkey(data, 80)?,
             market_group: read_pubkey(data, 112)?,
             max_observation_age_secs: read_u64(data, 144)?,
+            mark_policy: MarkPolicy {
+                epsilon_e6: read_u64(data, 152)?,
+                local_weight_bps: read_u32(data, 160)?,
+                basis_ema_alpha_bps: read_u32(data, 164)?,
+                max_basis_e6: read_u64(data, 168)?,
+                max_mark_deviation_e6: read_u64(data, 176)?,
+            },
+            max_source_spread_e6: read_u64(data, 184)?,
         })
     }
 
@@ -83,6 +94,12 @@ impl Config {
         data[80..112].copy_from_slice(self.percolator_program.as_ref());
         data[112..144].copy_from_slice(self.market_group.as_ref());
         data[144..152].copy_from_slice(&self.max_observation_age_secs.to_le_bytes());
+        data[152..160].copy_from_slice(&self.mark_policy.epsilon_e6.to_le_bytes());
+        data[160..164].copy_from_slice(&self.mark_policy.local_weight_bps.to_le_bytes());
+        data[164..168].copy_from_slice(&self.mark_policy.basis_ema_alpha_bps.to_le_bytes());
+        data[168..176].copy_from_slice(&self.mark_policy.max_basis_e6.to_le_bytes());
+        data[176..184].copy_from_slice(&self.mark_policy.max_mark_deviation_e6.to_le_bytes());
+        data[184..192].copy_from_slice(&self.max_source_spread_e6.to_le_bytes());
         Ok(())
     }
 }
@@ -103,6 +120,13 @@ pub struct ImportedPerpMarket {
     pub last_observation_slot: u64,
     pub last_observation_sequence: u64,
     pub last_mark_e6: u64,
+    pub last_index_e6: u64,
+    pub last_external_impact_bid_e6: u64,
+    pub last_external_impact_ask_e6: u64,
+    pub last_local_impact_bid_e6: u64,
+    pub last_local_impact_ask_e6: u64,
+    pub basis_ema_e6: i64,
+    pub oracle_health: u8,
     pub status: u8,
 }
 
@@ -127,6 +151,13 @@ impl ImportedPerpMarket {
             last_observation_slot: read_u64(data, 264)?,
             last_observation_sequence: read_u64(data, 272)?,
             last_mark_e6: read_u64(data, 280)?,
+            last_index_e6: read_u64(data, 288)?,
+            last_external_impact_bid_e6: read_u64(data, 296)?,
+            last_external_impact_ask_e6: read_u64(data, 304)?,
+            last_local_impact_bid_e6: read_u64(data, 312)?,
+            last_local_impact_ask_e6: read_u64(data, 320)?,
+            basis_ema_e6: read_i64(data, 328)?,
+            oracle_health: data[336],
         })
     }
 
@@ -152,6 +183,13 @@ impl ImportedPerpMarket {
         data[264..272].copy_from_slice(&self.last_observation_slot.to_le_bytes());
         data[272..280].copy_from_slice(&self.last_observation_sequence.to_le_bytes());
         data[280..288].copy_from_slice(&self.last_mark_e6.to_le_bytes());
+        data[288..296].copy_from_slice(&self.last_index_e6.to_le_bytes());
+        data[296..304].copy_from_slice(&self.last_external_impact_bid_e6.to_le_bytes());
+        data[304..312].copy_from_slice(&self.last_external_impact_ask_e6.to_le_bytes());
+        data[312..320].copy_from_slice(&self.last_local_impact_bid_e6.to_le_bytes());
+        data[320..328].copy_from_slice(&self.last_local_impact_ask_e6.to_le_bytes());
+        data[328..336].copy_from_slice(&self.basis_ema_e6.to_le_bytes());
+        data[336] = self.oracle_health;
         Ok(())
     }
 }
@@ -171,14 +209,19 @@ struct ActivationArgs {
 }
 
 #[derive(Clone, Copy)]
-struct ObservationArgs {
+struct PricingObservationArgs {
     external_market_id_hash: [u8; 32],
     rules_hash: [u8; 32],
     asset_index: u16,
     market_id: u64,
-    mark_e6: u64,
+    index_e6: u64,
+    external_impact_bid_e6: u64,
+    external_impact_ask_e6: u64,
+    local_impact_bid_e6: u64,
+    local_impact_ask_e6: u64,
     source_timestamp: i64,
     sequence: u64,
+    oracle_health: u8,
 }
 
 pub fn process_instruction(
@@ -192,14 +235,17 @@ pub fn process_instruction(
     match tag {
         0 => initialize_config(program_id, accounts, data),
         1 => activate_imported_perp(program_id, accounts, parse_activation(data)?),
-        2 => submit_observation(program_id, accounts, parse_observation(data)?),
+        // Legacy direct-mark observations are intentionally disabled. A signed
+        // reporter supplies auditable inputs; this program derives the mark.
+        2 => Err(MoxieError::InvalidInstruction.into()),
         3 => set_paused(program_id, accounts, data),
+        4 => submit_pricing_observation(program_id, accounts, parse_pricing_observation(data)?),
         _ => Err(MoxieError::InvalidInstruction.into()),
     }
 }
 
 fn initialize_config(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
-    if data.len() != 40 {
+    if data.len() != 40 && data.len() != 80 {
         return Err(MoxieError::InvalidInstruction.into());
     }
     let mut iter = accounts.iter();
@@ -224,7 +270,40 @@ fn initialize_config(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8])
     }
     let reporter = read_pubkey(data, 0)?;
     let max_age = read_u64(data, 32)?;
-    if reporter == Pubkey::default() || max_age == 0 || max_age > 3_600 {
+    let (mark_policy, max_source_spread_e6) = if data.len() == 80 {
+        (
+            MarkPolicy {
+                epsilon_e6: read_u64(data, 40)?,
+                local_weight_bps: read_u32(data, 48)?,
+                basis_ema_alpha_bps: read_u32(data, 52)?,
+                max_basis_e6: read_u64(data, 56)?,
+                max_mark_deviation_e6: read_u64(data, 64)?,
+            },
+            read_u64(data, 72)?,
+        )
+    } else {
+        (
+            MarkPolicy {
+                epsilon_e6: 1_000,
+                local_weight_bps: 0,
+                basis_ema_alpha_bps: 2_000,
+                max_basis_e6: 20_000,
+                max_mark_deviation_e6: 15_000,
+            },
+            100_000,
+        )
+    };
+    if reporter == Pubkey::default()
+        || max_age == 0
+        || max_age > 3_600
+        || !valid_live_price(500_000, mark_policy.epsilon_e6)
+        || mark_policy.local_weight_bps > 10_000
+        || mark_policy.basis_ema_alpha_bps > 10_000
+        || mark_policy.max_basis_e6 > 500_000
+        || mark_policy.max_mark_deviation_e6 > 500_000
+        || max_source_spread_e6 == 0
+        || max_source_spread_e6 > 500_000
+    {
         return Err(MoxieError::InvalidInstruction.into());
     }
     invoke_signed(
@@ -245,6 +324,8 @@ fn initialize_config(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8])
         percolator_program: *percolator_program.key,
         market_group: *market.key,
         max_observation_age_secs: max_age,
+        mark_policy,
+        max_source_spread_e6,
     }
     .write(&mut config.try_borrow_mut_data()?)
 }
@@ -364,15 +445,22 @@ fn activate_imported_perp(
         last_observation_slot: clock.slot,
         last_observation_sequence: 1,
         last_mark_e6: args.initial_mark_e6,
+        last_index_e6: args.initial_mark_e6,
+        last_external_impact_bid_e6: args.initial_mark_e6,
+        last_external_impact_ask_e6: args.initial_mark_e6,
+        last_local_impact_bid_e6: args.initial_mark_e6,
+        last_local_impact_ask_e6: args.initial_mark_e6,
+        basis_ema_e6: 0,
+        oracle_health: OracleHealth::Healthy as u8,
         status: 1,
     }
     .write(&mut record_ai.try_borrow_mut_data()?)
 }
 
-fn submit_observation(
+fn submit_pricing_observation(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    args: ObservationArgs,
+    args: PricingObservationArgs,
 ) -> ProgramResult {
     let mut iter = accounts.iter();
     let reporter = next_account_info(&mut iter)?;
@@ -400,22 +488,62 @@ fn submit_observation(
     {
         return Err(MoxieError::IdentityMismatch.into());
     }
-    validate_probability(args.mark_e6)?;
-    let clock = Clock::get()?;
-    if args.source_timestamp <= record.last_source_timestamp
-        || args.source_timestamp > clock.unix_timestamp.saturating_add(MAX_FUTURE_SKEW_SECS)
-        || clock.unix_timestamp.saturating_sub(args.source_timestamp)
-            > config.max_observation_age_secs as i64
+    let health = OracleHealth::try_from(args.oracle_health)
+        .map_err(|_| ProgramError::from(MoxieError::InvalidInstruction))?;
+    for price in [
+        args.index_e6,
+        args.external_impact_bid_e6,
+        args.external_impact_ask_e6,
+        args.local_impact_bid_e6,
+        args.local_impact_ask_e6,
+    ] {
+        if !valid_live_price(price, config.mark_policy.epsilon_e6) {
+            return Err(MoxieError::InvalidProbability.into());
+        }
+    }
+    if args.external_impact_bid_e6 > args.external_impact_ask_e6
+        || args.local_impact_bid_e6 > args.local_impact_ask_e6
+        || args.external_impact_ask_e6 - args.external_impact_bid_e6 > config.max_source_spread_e6
+        || args
+            .index_e6
+            .saturating_add(config.mark_policy.max_mark_deviation_e6)
+            < args.external_impact_bid_e6
+        || args
+            .index_e6
+            .saturating_sub(config.mark_policy.max_mark_deviation_e6)
+            > args.external_impact_ask_e6
     {
-        return Err(MoxieError::StaleObservation.into());
+        return Err(MoxieError::InvalidProbability.into());
     }
-    if args.sequence != record.last_observation_sequence.saturating_add(1) {
-        return Err(MoxieError::SequenceMismatch.into());
-    }
+    let clock = Clock::get()?;
+    validate_observation_clock(
+        &config,
+        &record,
+        args.source_timestamp,
+        args.sequence,
+        &clock,
+    )?;
+    let mark = compute_mark(
+        &config.mark_policy,
+        args.index_e6,
+        args.local_impact_bid_e6,
+        args.local_impact_ask_e6,
+        record.basis_ema_e6,
+        health,
+    )
+    .ok_or(MoxieError::InvalidProbability)?;
+
     record.last_source_timestamp = args.source_timestamp;
     record.last_observation_slot = clock.slot;
     record.last_observation_sequence = args.sequence;
-    record.last_mark_e6 = args.mark_e6;
+    record.last_mark_e6 = mark.mark_e6;
+    record.last_index_e6 = args.index_e6;
+    record.last_external_impact_bid_e6 = args.external_impact_bid_e6;
+    record.last_external_impact_ask_e6 = args.external_impact_ask_e6;
+    record.last_local_impact_bid_e6 = args.local_impact_bid_e6;
+    record.last_local_impact_ask_e6 = args.local_impact_ask_e6;
+    record.basis_ema_e6 = mark.basis_ema_e6;
+    record.oracle_health = args.oracle_health;
     record.write(&mut record_ai.try_borrow_mut_data()?)?;
     cpi_percolator(
         percolator_program,
@@ -424,7 +552,7 @@ fn submit_observation(
             asset_index: args.asset_index,
             market_id: args.market_id,
             now_slot: clock.slot,
-            mark_e6: args.mark_e6,
+            mark_e6: mark.mark_e6,
             observation_sequence: args.sequence,
             authority_epoch: 0,
         },
@@ -433,6 +561,26 @@ fn submit_observation(
             AccountMeta::new(*market.key, false),
         ],
     )
+}
+
+fn validate_observation_clock(
+    config: &Config,
+    record: &ImportedPerpMarket,
+    source_timestamp: i64,
+    sequence: u64,
+    clock: &Clock,
+) -> ProgramResult {
+    if source_timestamp <= record.last_source_timestamp
+        || source_timestamp > clock.unix_timestamp.saturating_add(MAX_FUTURE_SKEW_SECS)
+        || clock.unix_timestamp.saturating_sub(source_timestamp)
+            > config.max_observation_age_secs as i64
+    {
+        return Err(MoxieError::StaleObservation.into());
+    }
+    if sequence != record.last_observation_sequence.saturating_add(1) {
+        return Err(MoxieError::SequenceMismatch.into());
+    }
+    Ok(())
 }
 
 fn set_paused(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
@@ -523,19 +671,33 @@ fn parse_activation(data: &[u8]) -> Result<ActivationArgs, ProgramError> {
     })
 }
 
-fn parse_observation(data: &[u8]) -> Result<ObservationArgs, ProgramError> {
-    if data.len() != 98 {
+fn parse_pricing_observation(data: &[u8]) -> Result<PricingObservationArgs, ProgramError> {
+    if data.len() != 131 {
         return Err(MoxieError::InvalidInstruction.into());
     }
-    Ok(ObservationArgs {
+    Ok(PricingObservationArgs {
         external_market_id_hash: read_array_32(data, 0)?,
         rules_hash: read_array_32(data, 32)?,
         asset_index: read_u16(data, 64)?,
         market_id: read_u64(data, 66)?,
-        mark_e6: read_u64(data, 74)?,
-        source_timestamp: read_i64(data, 82)?,
-        sequence: read_u64(data, 90)?,
+        index_e6: read_u64(data, 74)?,
+        external_impact_bid_e6: read_u64(data, 82)?,
+        external_impact_ask_e6: read_u64(data, 90)?,
+        local_impact_bid_e6: read_u64(data, 98)?,
+        local_impact_ask_e6: read_u64(data, 106)?,
+        source_timestamp: read_i64(data, 114)?,
+        sequence: read_u64(data, 122)?,
+        oracle_health: data[130],
     })
+}
+
+fn read_u32(data: &[u8], offset: usize) -> Result<u32, ProgramError> {
+    Ok(u32::from_le_bytes(
+        data.get(offset..offset + 4)
+            .ok_or(MoxieError::InvalidInstruction)?
+            .try_into()
+            .unwrap(),
+    ))
 }
 
 fn read_array_32(data: &[u8], offset: usize) -> Result<[u8; 32], ProgramError> {
@@ -596,6 +758,13 @@ mod tests {
             last_observation_slot: 9,
             last_observation_sequence: 3,
             last_mark_e6: 650_000,
+            last_index_e6: 645_000,
+            last_external_impact_bid_e6: 640_000,
+            last_external_impact_ask_e6: 650_000,
+            last_local_impact_bid_e6: 642_000,
+            last_local_impact_ask_e6: 652_000,
+            basis_ema_e6: 2_000,
+            oracle_health: OracleHealth::Healthy as u8,
             status: 1,
         };
         let mut bytes = [0u8; RECORD_LEN];
@@ -608,5 +777,24 @@ mod tests {
         assert!(validate_probability(1).is_ok());
         assert!(validate_probability(999_999).is_ok());
         assert!(validate_probability(1_000_000).is_err());
+    }
+
+    #[test]
+    fn pricing_observation_layout_is_exact() {
+        let mut bytes = vec![0u8; 131];
+        bytes[64..66].copy_from_slice(&7u16.to_le_bytes());
+        bytes[66..74].copy_from_slice(&42u64.to_le_bytes());
+        bytes[74..82].copy_from_slice(&600_000u64.to_le_bytes());
+        bytes[82..90].copy_from_slice(&595_000u64.to_le_bytes());
+        bytes[90..98].copy_from_slice(&605_000u64.to_le_bytes());
+        bytes[98..106].copy_from_slice(&590_000u64.to_le_bytes());
+        bytes[106..114].copy_from_slice(&610_000u64.to_le_bytes());
+        bytes[114..122].copy_from_slice(&100i64.to_le_bytes());
+        bytes[122..130].copy_from_slice(&2u64.to_le_bytes());
+        bytes[130] = OracleHealth::Healthy as u8;
+        let parsed = parse_pricing_observation(&bytes).unwrap();
+        assert_eq!(parsed.index_e6, 600_000);
+        assert_eq!(parsed.local_impact_ask_e6, 610_000);
+        assert_eq!(parsed.oracle_health, 1);
     }
 }

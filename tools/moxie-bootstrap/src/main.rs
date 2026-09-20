@@ -160,15 +160,16 @@ fn position_q(client: &RpcClient, address: &Pubkey, asset_index: usize) -> Resul
 }
 
 fn matcher_init_data(delegate: &Pubkey, expiry_slot: u64) -> Vec<u8> {
-    let mut data = vec![2u8];
-    for value in [30u32, 500, 100, 80, 10, 10] {
+    let mut data = vec![5u8];
+    for value in [3_000u32, 100_000, 10_000, 80_000, 1_000, 2_000, 0, 1_000] {
         data.extend_from_slice(&value.to_le_bytes());
     }
     data.extend_from_slice(&expiry_slot.to_le_bytes());
     data.extend_from_slice(&1_000_000_000u128.to_le_bytes());
     data.extend_from_slice(&10_000_000u128.to_le_bytes());
     data.extend_from_slice(&100_000_000u128.to_le_bytes());
-    debug_assert_eq!(data.len(), 81);
+    data.extend_from_slice(&1_000u32.to_le_bytes());
+    debug_assert_eq!(data.len(), 93);
     let _ = delegate;
     data
 }
@@ -317,6 +318,13 @@ fn main() -> Result<()> {
     let mut init_oracle = vec![0u8];
     init_oracle.extend_from_slice(payer.pubkey().as_ref());
     init_oracle.extend_from_slice(&30u64.to_le_bytes());
+    init_oracle.extend_from_slice(&1_000u64.to_le_bytes());
+    init_oracle.extend_from_slice(&2_500u32.to_le_bytes());
+    init_oracle.extend_from_slice(&2_000u32.to_le_bytes());
+    init_oracle.extend_from_slice(&20_000u64.to_le_bytes());
+    init_oracle.extend_from_slice(&15_000u64.to_le_bytes());
+    init_oracle.extend_from_slice(&100_000u64.to_le_bytes());
+    debug_assert_eq!(init_oracle.len(), 81);
     send(
         &client,
         &payer,
@@ -417,6 +425,51 @@ fn main() -> Result<()> {
             &[],
         )
         .with_context(|| format!("activate imported market {external_id}"))?;
+
+        // Group 1 proof: the reporter submits auditable external/local pricing
+        // inputs. Moxie's oracle program derives the risk mark on-chain.
+        let source_timestamp = client
+            .get_block_time(client.get_slot()?)
+            .context("read source timestamp for pricing observation")?;
+        let external_bid = mark.saturating_sub(5_000).max(1_000);
+        let external_ask = mark.saturating_add(5_000).min(999_000);
+        let local_bid = mark.saturating_sub(8_000).max(1_000);
+        let local_ask = mark.saturating_add(8_000).min(999_000);
+        let mut observation = vec![4u8];
+        observation.extend_from_slice(&external_hash);
+        observation.extend_from_slice(hash(rules.as_bytes()).as_ref());
+        observation.extend_from_slice(&asset_index.to_le_bytes());
+        observation.extend_from_slice(&market_id.to_le_bytes());
+        observation.extend_from_slice(&mark.to_le_bytes());
+        observation.extend_from_slice(&external_bid.to_le_bytes());
+        observation.extend_from_slice(&external_ask.to_le_bytes());
+        observation.extend_from_slice(&local_bid.to_le_bytes());
+        observation.extend_from_slice(&local_ask.to_le_bytes());
+        observation.extend_from_slice(&source_timestamp.to_le_bytes());
+        observation.extend_from_slice(&2u64.to_le_bytes());
+        observation.push(1);
+        debug_assert_eq!(observation.len(), 132);
+        send(
+            &client,
+            &payer,
+            &[
+                ComputeBudgetInstruction::request_heap_frame(128 * 1024),
+                ComputeBudgetInstruction::set_compute_unit_limit(1_400_000),
+                Instruction {
+                    program_id: oracle_program_id,
+                    accounts: vec![
+                        AccountMeta::new_readonly(payer.pubkey(), true),
+                        AccountMeta::new_readonly(oracle_config, false),
+                        AccountMeta::new(record, false),
+                        AccountMeta::new(market.pubkey(), false),
+                        AccountMeta::new_readonly(program_id, false),
+                    ],
+                    data: observation,
+                },
+            ],
+            &[],
+        )
+        .with_context(|| format!("submit guarded pricing observation for {external_id}"))?;
         previous_activation_slot = slot;
         imported_markets.push(ImportedDeployment {
             provider_market_id: external_id.clone(),

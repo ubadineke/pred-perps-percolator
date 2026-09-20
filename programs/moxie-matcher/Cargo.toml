@@ -10,5 +10,5 @@ crate-type = ["cdylib", "lib"]
 no-entrypoint = []
 
 [dependencies]
+moxie-probability-math = { path = "../../crates/probability-math" }
 solana-program = "1.18.26"
-
