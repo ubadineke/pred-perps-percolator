@@ -8,6 +8,8 @@
   },
   "scripts": {
     "build": "node scripts/build.mjs",
+    "dev:web": "pnpm --filter @moxie/web dev",
+    "build:web": "pnpm --filter @moxie/web build",
     "test": "pnpm run test:unit && pnpm run test:integration && pnpm run test:adversarial",
     "test:unit": "node --test packages/provider-adapter/test/*.test.ts packages/market-catalog/test/*.test.ts packages/config/test/*.test.ts packages/sdk/test/*.test.ts services/oracle-reporter/test/*.test.ts",
     "test:integration": "node --test tests/integration/*.test.ts",

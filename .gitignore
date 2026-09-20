@@ -5,6 +5,7 @@
 .superstack/
 docs/
 node_modules/
+.next/
 target/
 coverage/
 dist/
