@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { markets } from "@/lib/markets";
+import type { Market } from "@/lib/markets";
 
-export function MarketTable() {
+export function MarketTable({markets}:{markets:Market[]}) {
   return (
     <div className="market-table-wrap">
       <table className="market-table">
@@ -12,7 +12,7 @@ export function MarketTable() {
             <td><Link href={`/trade/${market.slug}`}><i className={`market-symbol symbol-${market.category.toLowerCase()}`}>{market.short.slice(0, 2)}</i><span><b>{market.question}</b><em>{market.category} · {market.provider}</em></span></Link></td>
             <td><strong>{market.moxie.toFixed(1)}¢</strong></td>
             <td>{market.index.toFixed(1)}¢</td>
-            <td className={market.change >= 0 ? "positive" : "negative"}>{market.change >= 0 ? "+" : ""}{market.change}%</td>
+            <td className={market.change===null?"":market.change>=0?"positive":"negative"}>{market.change===null?"—":`${market.change>=0?"+":""}${market.change}%`}</td>
             <td>{market.volume}</td><td>{market.oi}</td><td>{market.lock}</td>
             <td><Link className="row-action" aria-label={`Trade ${market.question}`} href={`/trade/${market.slug}`}><ArrowUpRight size={17} /></Link></td>
           </tr>

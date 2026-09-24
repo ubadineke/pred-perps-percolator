@@ -3,9 +3,11 @@ import { ArrowRight, Braces, Clock3, Radio, ShieldCheck } from "lucide-react";
 import { PriceFormation } from "@/components/price-formation";
 import { SiteHeader } from "@/components/site-header";
 import { TradePlayground } from "@/components/trade-playground";
-import { markets } from "@/lib/markets";
+import { getMarkets } from "@/lib/api";
 
-export default function Home() {
+export default async function Home() {
+  const markets=await getMarkets().catch(()=>[]);
+  const terminalHref=markets[0]?`/trade/${markets[0].slug}`:"/markets";
   return (
     <main className="landing">
       <SiteHeader floating />
@@ -17,7 +19,7 @@ export default function Home() {
           <Link href={`/trade/${market.slug}`} key={market.slug}>
             <span>{market.short}</span>
             <b>{market.moxie.toFixed(1)}¢</b>
-            <em className={market.change >= 0 ? "positive" : "negative"}>{market.change >= 0 ? "+" : ""}{market.change}%</em>
+            <em>{market.change===null?"CHAIN":`${market.change>=0?"+":""}${market.change}%`}</em>
           </Link>
         ))}
         <Link className="all-markets" href="/markets">All markets <ArrowRight size={14} /></Link>
@@ -45,7 +47,7 @@ export default function Home() {
           <p className="section-index">03 / EXECUTION</p>
           <h2>A terminal built for what happens next.</h2>
           <p>Price, pressure, time and risk—visible before you sign.</p>
-          <Link className="text-link" href="/trade/sol-above-250-friday">Open the terminal <ArrowRight size={16} /></Link>
+          <Link className="text-link" href={terminalHref}>Open the terminal <ArrowRight size={16} /></Link>
         </div>
         <div className="terminal-window">
           <div className="window-top"><span><i /><i /><i /></span><b>MOXIE / SOL &gt; $250</b><em>ORACLE LIVE</em></div>

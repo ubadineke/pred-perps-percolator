@@ -1,0 +1,3 @@
+import assert from"node:assert/strict";import test from"node:test";import{decodePortfolioSummary}from"../src/accounts.ts";
+const u64=(b:Uint8Array,o:number,x:bigint)=>new DataView(b.buffer).setBigUint64(o,x,true);
+test("decodes portfolio positions and certified health",()=>{const b=new Uint8Array(9571);u64(b,9539,7n);u64(b,9547,8n);b[356]=1;new DataView(b.buffer).setUint32(357,2,true);u64(b,361,3n);b[369]=0;u64(b,370,4n);u64(b,386,5n);u64(b,8852,100n);u64(b,8868,20n);u64(b,8884,10n);b[8972]=1;const p=decodePortfolioSummary(b);assert.equal(p.portfolioId,7n);assert.equal(p.positions[0].assetIndex,2);assert.equal(p.positions[0].sizeQ,4n);assert.equal(p.health.equity,100n);assert.equal(p.health.valid,true)});

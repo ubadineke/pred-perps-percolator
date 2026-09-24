@@ -54,6 +54,7 @@ struct RiskConfig {
     trade_fee_base_bps: u64,
     liquidation_fee_bps: u64,
     max_price_move_bps_per_slot: u64,
+    max_abs_funding_e9_per_slot: u64,
 }
 
 #[derive(Deserialize)]
@@ -103,6 +104,15 @@ struct EngineDemoDeployment {
     trader_position_q: i128,
     lp_position_q: i128,
     slippage_rejection_proven: bool,
+    funding_epoch: u64,
+    funding_long_paid_atoms: u128,
+    funding_short_received_atoms: u128,
+    hard_flat_proven: bool,
+    resolution_proven: bool,
+    terminal_outcome: u8,
+    withdrawal_proven: bool,
+    duplicate_resolution_rejected: bool,
+    conflicting_resolution_rejected: bool,
 }
 
 #[derive(Serialize)]
@@ -159,8 +169,25 @@ fn position_q(client: &RpcClient, address: &Pubkey, asset_index: usize) -> Resul
     Ok(0)
 }
 
-fn matcher_init_data(delegate: &Pubkey, expiry_slot: u64) -> Vec<u8> {
-    let mut data = vec![5u8];
+fn funding_totals(client: &RpcClient, address: &Pubkey) -> Result<(u128, u128, u128, u128)> {
+    let account = client.get_account(address)?;
+    let portfolio = state::read_portfolio(&account.data)?;
+    Ok((
+        portfolio.funding_long_paid_atoms_total.get(),
+        portfolio.funding_long_received_atoms_total.get(),
+        portfolio.funding_short_paid_atoms_total.get(),
+        portfolio.funding_short_received_atoms_total.get(),
+    ))
+}
+
+fn matcher_init_data(
+    delegate: &Pubkey,
+    expiry_slot: u64,
+    restricted_at: i64,
+    reduce_only_at: i64,
+    hard_flat_at: i64,
+) -> Vec<u8> {
+    let mut data = vec![6u8];
     for value in [3_000u32, 100_000, 10_000, 80_000, 1_000, 2_000, 0, 1_000] {
         data.extend_from_slice(&value.to_le_bytes());
     }
@@ -169,7 +196,12 @@ fn matcher_init_data(delegate: &Pubkey, expiry_slot: u64) -> Vec<u8> {
     data.extend_from_slice(&10_000_000u128.to_le_bytes());
     data.extend_from_slice(&100_000_000u128.to_le_bytes());
     data.extend_from_slice(&1_000u32.to_le_bytes());
-    debug_assert_eq!(data.len(), 93);
+    data.extend_from_slice(&restricted_at.to_le_bytes());
+    data.extend_from_slice(&reduce_only_at.to_le_bytes());
+    data.extend_from_slice(&hard_flat_at.to_le_bytes());
+    data.extend_from_slice(&5_000u32.to_le_bytes());
+    data.extend_from_slice(&7_500u32.to_le_bytes());
+    debug_assert_eq!(data.len(), 125);
     let _ = delegate;
     data
 }
@@ -180,6 +212,7 @@ fn main() -> Result<()> {
         bail!("usage: moxie-bootstrap <rpc-url> <percolator-keypair> <matcher-keypair> <oracle-keypair> <market-config> <deployment-output> [payer-keypair] [imported-market-manifest]");
     }
     let rpc_url = args[1].clone();
+    let is_devnet = args[6].contains("devnet");
     let program_keypair =
         read_keypair_file(&args[2]).map_err(|error| anyhow::anyhow!(error.to_string()))?;
     let program_id = program_keypair.pubkey();
@@ -257,7 +290,7 @@ fn main() -> Result<()> {
         // Bootstrap and provider reporting span multiple validator slots; cap catch-up
         // without requiring every control transaction to land in the immediately next slot.
         max_accrual_dt_slots: 100,
-        max_abs_funding_e9_per_slot: 0,
+        max_abs_funding_e9_per_slot: config.risk.max_abs_funding_e9_per_slot,
         min_funding_lifetime_slots: 100,
         max_account_b_settlement_chunks: 1,
         max_bankrupt_close_chunks: 1,
@@ -324,11 +357,20 @@ fn main() -> Result<()> {
     init_oracle.extend_from_slice(&20_000u64.to_le_bytes());
     init_oracle.extend_from_slice(&15_000u64.to_le_bytes());
     init_oracle.extend_from_slice(&100_000u64.to_le_bytes());
-    debug_assert_eq!(init_oracle.len(), 81);
+    init_oracle.extend_from_slice(&10u32.to_le_bytes());
+    init_oracle.extend_from_slice(&[0u8; 4]);
+    init_oracle.extend_from_slice(&50_000u64.to_le_bytes());
+    init_oracle.extend_from_slice(&5_000u64.to_le_bytes());
+    init_oracle.extend_from_slice(&150_000u64.to_le_bytes());
+    init_oracle.extend_from_slice(&500u64.to_le_bytes());
+    debug_assert_eq!(init_oracle.len(), 121);
     send(
         &client,
         &payer,
-        &[Instruction {
+        &[
+            ComputeBudgetInstruction::request_heap_frame(128 * 1024),
+            ComputeBudgetInstruction::set_compute_unit_limit(1_400_000),
+            Instruction {
             program_id: oracle_program_id,
             accounts: vec![
                 AccountMeta::new(payer.pubkey(), true),
@@ -366,17 +408,28 @@ fn main() -> Result<()> {
             live.initial_mark_e6,
         )]
     } else {
-        vec![(
-            "jup-sol-250-friday".to_owned(),
-            "yes-sol-250".to_owned(),
-            "no-sol-250".to_owned(),
-            "Will SOL close above $250 Friday?".to_owned(),
-            "Jupiter provider rules v1".to_owned(),
-            2_000_000_000_000,
-            550_000u64,
-        )]
+        vec![
+            (
+                "jup-sol-250-friday".to_owned(), "yes-sol-250".to_owned(),
+                "no-sol-250".to_owned(), "Will SOL close above $250 Friday?".to_owned(),
+                "Jupiter provider rules v1".to_owned(), 2_000_000_000_000, 550_000u64,
+            ),
+            (
+                "jup-fed-cut-next-meeting".to_owned(), "yes-fed-cut".to_owned(),
+                "no-fed-cut".to_owned(), "Will the Fed cut rates at its next meeting?".to_owned(),
+                "Jupiter provider rules v1 — Fed decision".to_owned(), 2_000_000_000_000, 420_000u64,
+            ),
+        ]
     };
     let mut imported_markets = Vec::new();
+    let lifecycle_now = client.get_block_time(client.get_slot()?)?;
+    // Devnet confirmation and RPC latency can consume the local fixture's entire
+    // 30-second live window before the matcher proof lands.
+    let (restricted_delay, reduce_only_delay, hard_flat_delay) =
+        if is_devnet { (120, 150, 180) } else { (30, 35, 40) };
+    let demo_restricted_at = lifecycle_now.saturating_add(restricted_delay);
+    let demo_reduce_only_at = lifecycle_now.saturating_add(reduce_only_delay);
+    let demo_hard_flat_at = lifecycle_now.saturating_add(hard_flat_delay);
     let mut previous_activation_slot = client.get_slot()?;
     for (offset, (external_id, yes_id, no_id, title, rules, close_time_ms, mark)) in
         demos.iter().enumerate()
@@ -391,17 +444,28 @@ fn main() -> Result<()> {
             &oracle_program_id,
         );
         let slot = wait_for_next_slot(&client, previous_activation_slot)?;
-        let mut activation = vec![1u8];
+        let close_time = if args.get(8).is_none() {
+            demo_hard_flat_at.saturating_add(2)
+        } else {
+            (*close_time_ms / 1_000) as i64
+        };
+        let restricted_at = demo_restricted_at;
+        let reduce_only_at = demo_reduce_only_at;
+        let hard_flat_at = demo_hard_flat_at;
+        let mut activation = vec![5u8];
         for value in [external_id, yes_id, no_id, title, rules] {
             activation.extend_from_slice(hash(value.as_bytes()).as_ref());
         }
-        activation.extend_from_slice(&((*close_time_ms / 1_000) as i64).to_le_bytes());
+        activation.extend_from_slice(&close_time.to_le_bytes());
         activation.extend_from_slice(&asset_index.to_le_bytes());
         activation.extend_from_slice(&market_id.to_le_bytes());
         activation.extend_from_slice(&mark.to_le_bytes());
         // Zero asks Percolator to authenticate the current Clock slot itself, avoiding
         // commitment-level RPC lag between the client and the executing bank.
         activation.extend_from_slice(&0u64.to_le_bytes());
+        activation.extend_from_slice(&restricted_at.to_le_bytes());
+        activation.extend_from_slice(&reduce_only_at.to_le_bytes());
+        activation.extend_from_slice(&hard_flat_at.to_le_bytes());
         send(
             &client,
             &payer,
@@ -433,8 +497,8 @@ fn main() -> Result<()> {
             .context("read source timestamp for pricing observation")?;
         let external_bid = mark.saturating_sub(5_000).max(1_000);
         let external_ask = mark.saturating_add(5_000).min(999_000);
-        let local_bid = mark.saturating_sub(8_000).max(1_000);
-        let local_ask = mark.saturating_add(8_000).min(999_000);
+        let local_bid = mark.saturating_add(4_000).min(990_000);
+        let local_ask = mark.saturating_add(12_000).min(999_000);
         let mut observation = vec![4u8];
         observation.extend_from_slice(&external_hash);
         observation.extend_from_slice(hash(rules.as_bytes()).as_ref());
@@ -638,7 +702,13 @@ fn main() -> Result<()> {
                     AccountMeta::new_readonly(market.pubkey(), false),
                     AccountMeta::new_readonly(lp_portfolio.pubkey(), false),
                 ],
-                data: matcher_init_data(&matcher_delegate, matcher_expiry),
+                data: matcher_init_data(
+                    &matcher_delegate,
+                    matcher_expiry,
+                    demo_restricted_at,
+                    demo_reduce_only_at,
+                    demo_hard_flat_at,
+                ),
             },
         ],
         &[&lp, &matcher_context],
@@ -677,6 +747,36 @@ fn main() -> Result<()> {
     .context("bind LP portfolio to Moxie matcher")?;
 
     let imported = &imported_markets[0];
+    // Materialize the authenticated mark/funding checkpoint before the first
+    // risk-increasing trade. Percolator intentionally rejects trading across a
+    // pending oracle target.
+    send(
+        &client,
+        &payer,
+        &[
+            ComputeBudgetInstruction::request_heap_frame(128 * 1024),
+            ComputeBudgetInstruction::set_compute_unit_limit(1_400_000),
+            Instruction {
+                program_id,
+                accounts: vec![
+                    AccountMeta::new_readonly(trader.pubkey(), false),
+                    AccountMeta::new(market.pubkey(), false),
+                    AccountMeta::new(trader_portfolio.pubkey(), false),
+                ],
+                data: PercolatorInstruction::PermissionlessCrank {
+                    now_slot: 0,
+                    observations: vec![percolator_prog::ix::CrankObservationHint {
+                        asset_index: imported.asset_index,
+                        oracle_accounts: 0,
+                    }],
+                }
+                .encode(),
+            },
+        ],
+        &[],
+    )
+    .context("materialize guarded mark and funding checkpoint")?;
+
     let (trader_id, trader_epoch, _) = portfolio_snapshot(&client, &trader_portfolio.pubkey())?;
     let (lp_id, lp_epoch, lp_sequence) = portfolio_snapshot(&client, &lp_portfolio.pubkey())?;
     let trade_ix = |limit_price| Instruction {
@@ -747,6 +847,219 @@ fn main() -> Result<()> {
         bail!("matcher accepted a trade beyond the taker's limit");
     }
 
+    let funding_start_slot = client.get_slot()?;
+    wait_for_next_slot(&client, funding_start_slot)?;
+    let funding_crank = |owner: Pubkey, portfolio: Pubkey| Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(owner, false),
+            AccountMeta::new(market.pubkey(), false),
+            AccountMeta::new(portfolio, false),
+        ],
+        data: PercolatorInstruction::PermissionlessCrank {
+            now_slot: 0,
+            observations: vec![percolator_prog::ix::CrankObservationHint {
+                asset_index: imported.asset_index,
+                oracle_accounts: 0,
+            }],
+        }
+        .encode(),
+    };
+    send(
+        &client,
+        &payer,
+        &[
+            ComputeBudgetInstruction::request_heap_frame(128 * 1024),
+            ComputeBudgetInstruction::set_compute_unit_limit(1_400_000),
+            funding_crank(trader.pubkey(), trader_portfolio.pubkey()),
+            funding_crank(lp.pubkey(), lp_portfolio.pubkey()),
+        ],
+        &[],
+    )
+    .context("atomically accrue and settle bounded funding")?;
+    let funded_market_account = client.get_account(&market.pubkey())?;
+    let (_, funded_group) = state::read_market(&funded_market_account.data)?;
+    let funding_epoch = funded_group.funding_epoch;
+    if funding_epoch == 0 {
+        bail!("funding crank did not advance the funding epoch");
+    }
+    let (funding_long_paid_atoms, _, _, _) =
+        funding_totals(&client, &trader_portfolio.pubkey())?;
+    let (_, _, _, funding_short_received_atoms) =
+        funding_totals(&client, &lp_portfolio.pubkey())?;
+    if funding_long_paid_atoms == 0 || funding_short_received_atoms == 0 {
+        bail!("absolute-point funding did not transfer between the exposed portfolios");
+    }
+    if funding_long_paid_atoms != funding_short_received_atoms {
+        bail!(
+            "funding is not zero-sum: long paid {}, short received {}",
+            funding_long_paid_atoms,
+            funding_short_received_atoms
+        );
+    }
+
+    while client.get_block_time(client.get_slot()?)? <= demo_hard_flat_at {
+        thread::sleep(Duration::from_millis(250));
+    }
+    let imported_record: Pubkey = imported.record.parse()?;
+    let (trader_id, trader_epoch, _) = portfolio_snapshot(&client, &trader_portfolio.pubkey())?;
+    let (lp_id, lp_epoch, _) = portfolio_snapshot(&client, &lp_portfolio.pubkey())?;
+    let mut hard_flat = vec![7u8];
+    for value in [trader_id, trader_epoch, lp_id, lp_epoch] {
+        hard_flat.extend_from_slice(&value.to_le_bytes());
+    }
+    hard_flat.extend_from_slice(&1_000_000u128.to_le_bytes());
+    send(
+        &client,
+        &payer,
+        &[
+            ComputeBudgetInstruction::request_heap_frame(128 * 1024),
+            ComputeBudgetInstruction::set_compute_unit_limit(1_400_000),
+            Instruction {
+                program_id: oracle_program_id,
+                accounts: vec![
+                    AccountMeta::new(payer.pubkey(), true),
+                    AccountMeta::new_readonly(oracle_config, false),
+                    AccountMeta::new(imported_record, false),
+                    AccountMeta::new(market.pubkey(), false),
+                    AccountMeta::new(trader_portfolio.pubkey(), false),
+                    AccountMeta::new(lp_portfolio.pubkey(), false),
+                    AccountMeta::new_readonly(program_id, false),
+                ],
+                data: hard_flat,
+            },
+        ],
+        &[],
+    )
+    .context("hard-flat matched binary exposure after the lifecycle deadline")?;
+    send(
+        &client,
+        &payer,
+        &[Instruction {
+            program_id: oracle_program_id,
+            accounts: vec![
+                AccountMeta::new(payer.pubkey(), true),
+                AccountMeta::new_readonly(oracle_config, false),
+                AccountMeta::new(imported_record, false),
+                AccountMeta::new(market.pubkey(), false),
+                AccountMeta::new_readonly(program_id, false),
+            ],
+            data: vec![6],
+        }],
+        &[],
+    )
+    .context("lock the fully flattened market")?;
+    let hard_flat_proven = position_q(&client, &trader_portfolio.pubkey(), imported.asset_index as usize)? == 0
+        && position_q(&client, &lp_portfolio.pubkey(), imported.asset_index as usize)? == 0;
+    if !hard_flat_proven {
+        bail!("hard-flat route left binary exposure open");
+    }
+
+    // The fixture resolves YES. This is deliberately submitted only after the
+    // immutable provider close time and after every demonstrated position is flat.
+    let fixture_close_time = demo_hard_flat_at.saturating_add(2);
+    while client.get_block_time(client.get_slot()?)? < fixture_close_time {
+        thread::sleep(Duration::from_millis(250));
+    }
+    let terminal_outcome = 1u8;
+    let mut resolution = vec![8u8];
+    resolution.extend_from_slice(hash("jup-sol-250-friday".as_bytes()).as_ref());
+    resolution.extend_from_slice(hash("Jupiter provider rules v1".as_bytes()).as_ref());
+    resolution.extend_from_slice(&imported.asset_index.to_le_bytes());
+    resolution.extend_from_slice(&imported.market_id.to_le_bytes());
+    resolution.push(terminal_outcome);
+    resolution.extend_from_slice(&client.get_block_time(client.get_slot()?)?.to_le_bytes());
+    resolution.extend_from_slice(&3u64.to_le_bytes());
+    let resolution_proven = if args.get(8).is_none() {
+        send(
+            &client,
+            &payer,
+            &[Instruction {
+                program_id: oracle_program_id,
+                accounts: vec![
+                    AccountMeta::new_readonly(payer.pubkey(), true),
+                    AccountMeta::new_readonly(oracle_config, false),
+                    AccountMeta::new(imported_record, false),
+                    AccountMeta::new(market.pubkey(), false),
+                    AccountMeta::new_readonly(program_id, false),
+                ],
+                data: resolution.clone(),
+            }],
+            &[],
+        )
+        .context("submit authenticated final provider result")?;
+        true
+    } else {
+        false
+    };
+    let duplicate_resolution_rejected = if args.get(8).is_none() {
+        send(
+            &client,
+            &payer,
+            &[Instruction {
+                program_id: oracle_program_id,
+                accounts: vec![
+                    AccountMeta::new_readonly(payer.pubkey(), true),
+                    AccountMeta::new_readonly(oracle_config, false),
+                    AccountMeta::new(imported_record, false),
+                    AccountMeta::new(market.pubkey(), false),
+                    AccountMeta::new_readonly(program_id, false),
+                ],
+                data: resolution.clone(),
+            }],
+            &[],
+        )
+        .is_err()
+    } else { false };
+    let mut conflict = resolution;
+    conflict[75] = 0;
+    conflict[84..92].copy_from_slice(&4u64.to_le_bytes());
+    let conflicting_resolution_rejected = if args.get(8).is_none() {
+        send(
+            &client,
+            &payer,
+            &[Instruction {
+                program_id: oracle_program_id,
+                accounts: vec![
+                    AccountMeta::new_readonly(payer.pubkey(), true),
+                    AccountMeta::new_readonly(oracle_config, false),
+                    AccountMeta::new(imported_record, false),
+                    AccountMeta::new(market.pubkey(), false),
+                    AccountMeta::new_readonly(program_id, false),
+                ],
+                data: conflict,
+            }],
+            &[],
+        )
+        .is_err()
+    } else { false };
+    let (trader_id, _, trader_sequence) = portfolio_snapshot(&client, &trader_portfolio.pubkey())?;
+    send(
+        &client,
+        &payer,
+        &[Instruction {
+            program_id,
+            accounts: vec![
+                AccountMeta::new_readonly(trader.pubkey(), true),
+                AccountMeta::new(market.pubkey(), false),
+                AccountMeta::new(trader_portfolio.pubkey(), false),
+                AccountMeta::new(trader_token, false),
+                AccountMeta::new(vault, false),
+                AccountMeta::new_readonly(vault_authority, false),
+                AccountMeta::new_readonly(spl_token::id(), false),
+            ],
+            data: PercolatorInstruction::Withdraw {
+                portfolio_id: trader_id,
+                expected_sequence: trader_sequence,
+                amount: 1,
+            }
+            .encode(),
+        }],
+        &[&trader],
+    )
+    .context("withdraw collateral after terminal event close")?;
+    let withdrawal_proven = true;
+
     let engine_demo = EngineDemoDeployment {
         trader: trader.pubkey().to_string(),
         trader_portfolio: trader_portfolio.pubkey().to_string(),
@@ -761,12 +1074,25 @@ fn main() -> Result<()> {
         trader_position_q,
         lp_position_q,
         slippage_rejection_proven,
+        funding_epoch,
+        funding_long_paid_atoms,
+        funding_short_received_atoms,
+        hard_flat_proven,
+        resolution_proven,
+        terminal_outcome,
+        withdrawal_proven,
+        duplicate_resolution_rejected,
+        conflicting_resolution_rejected,
     };
 
-    let key_path = Path::new("deployments/localnet-market.keypair.json");
+    let key_path = if is_devnet {
+        Path::new("deployments/devnet-market.keypair.json")
+    } else {
+        Path::new("deployments/localnet-market.keypair.json")
+    };
     write_keypair_file(&market, key_path).map_err(|error| anyhow::anyhow!(error.to_string()))?;
     let deployment = Deployment {
-        cluster: "localnet",
+        cluster: if is_devnet { "devnet" } else { "localnet" },
         rpc_url,
         percolator_program_id: program_id.to_string(),
         matcher_program_id: matcher_program_id.to_string(),

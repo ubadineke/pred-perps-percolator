@@ -22,6 +22,18 @@ export type PricingObservation = {
   oracleHealth: 1 | 2;
 };
 
+export type MarketLifecyclePolicy = {
+  restrictedAt: bigint;
+  reduceOnlyAt: bigint;
+  hardFlatAt: bigint;
+};
+
+export type ResolutionObservation = {
+  outcome: 0 | 1;
+  sourceTimestamp: bigint;
+  sequence: bigint;
+};
+
 export function hashIdentity(value: string): Uint8Array {
   if (!value.trim()) throw new Error("identity fields cannot be empty");
   return createHash("sha256").update(value, "utf8").digest();
@@ -31,12 +43,16 @@ export function encodeActivateImportedPerp(
   identity: ImportedMarketIdentity,
   mark: bigint,
   slot: bigint,
+  lifecycle?: MarketLifecyclePolicy,
 ): Uint8Array {
   probability(mark);
   if (identity.assetIndex < 0 || identity.assetIndex > 0xffff) throw new Error("invalid asset index");
-  const output = new Uint8Array(195);
+  if (lifecycle && !(lifecycle.restrictedAt < lifecycle.reduceOnlyAt && lifecycle.reduceOnlyAt < lifecycle.hardFlatAt && lifecycle.hardFlatAt < identity.externalCloseTime)) {
+    throw new Error("invalid lock-clock ordering");
+  }
+  const output = new Uint8Array(lifecycle ? 219 : 195);
   const view = new DataView(output.buffer);
-  output[0] = 1;
+  output[0] = lifecycle ? 5 : 1;
   let offset = 1;
   for (const value of [identity.externalMarketId, identity.externalYesId, identity.externalNoId, identity.title, identity.rules]) {
     output.set(hashIdentity(value), offset);
@@ -46,7 +62,12 @@ export function encodeActivateImportedPerp(
   view.setUint16(offset, identity.assetIndex, true); offset += 2;
   view.setBigUint64(offset, identity.marketId, true); offset += 8;
   view.setBigUint64(offset, mark, true); offset += 8;
-  view.setBigUint64(offset, slot, true);
+  view.setBigUint64(offset, slot, true); offset += 8;
+  if (lifecycle) {
+    view.setBigInt64(offset, lifecycle.restrictedAt, true); offset += 8;
+    view.setBigInt64(offset, lifecycle.reduceOnlyAt, true); offset += 8;
+    view.setBigInt64(offset, lifecycle.hardFlatAt, true);
+  }
   return output;
 }
 
@@ -78,6 +99,26 @@ export function encodePricingObservation(
   view.setBigInt64(115, observation.sourceTimestamp, true);
   view.setBigUint64(123, observation.sequence, true);
   output[131] = observation.oracleHealth;
+  return output;
+}
+
+export function encodeResolutionObservation(
+  identity: Pick<ImportedMarketIdentity, "externalMarketId" | "rules" | "assetIndex" | "marketId">,
+  resolution: ResolutionObservation,
+): Uint8Array {
+  if (resolution.outcome !== 0 && resolution.outcome !== 1) throw new Error("binary outcome must be 0 or 1");
+  if (resolution.sequence <= 0n) throw new Error("resolution sequence must be positive");
+  if (identity.assetIndex < 0 || identity.assetIndex > 0xffff) throw new Error("invalid asset index");
+  const output = new Uint8Array(92);
+  const view = new DataView(output.buffer);
+  output[0] = 8;
+  output.set(hashIdentity(identity.externalMarketId), 1);
+  output.set(hashIdentity(identity.rules), 33);
+  view.setUint16(65, identity.assetIndex, true);
+  view.setBigUint64(67, identity.marketId, true);
+  output[75] = resolution.outcome;
+  view.setBigInt64(76, resolution.sourceTimestamp, true);
+  view.setBigUint64(84, resolution.sequence, true);
   return output;
 }
 

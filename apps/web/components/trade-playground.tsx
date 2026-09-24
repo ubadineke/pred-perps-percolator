@@ -53,7 +53,7 @@ export function TradePlayground() {
         <span className="professional-kicker"><i/> SOLANA-NATIVE PREDICTION PERPS</span>
         <h1>Trade conviction,<br/><em>not just outcomes.</em></h1>
         <p>Long or short the probability of real-world events with leverage, shared margin, and risk controls built for markets that eventually end.</p>
-        <div className="professional-actions"><Link className="launch-action" href="/trade/sol-above-250-friday">Launch terminal <ArrowRight size={16}/></Link><Link className="explore-action" href="/markets">Explore markets</Link></div>
+        <div className="professional-actions"><Link className="launch-action" href="/markets">Launch terminal <ArrowRight size={16}/></Link><Link className="explore-action" href="/markets">Explore markets</Link></div>
       </div>
 
       <div className="market-demo-stage">

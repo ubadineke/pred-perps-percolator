@@ -3,8 +3,16 @@
 extern crate alloc;
 
 use alloc::{format, vec, vec::Vec};
-use moxie_probability_math::{compute_mark, valid_live_price, MarkPolicy, OracleHealth};
-use percolator_prog::{ix::Instruction as PercolatorInstruction, processor::ASSET_ACTION_ACTIVATE};
+use moxie_probability_math::{
+    bounded_funding_unit_e6, compute_mark, funding_premium_e6, lifecycle_for_time,
+    transition_is_monotonic, valid_live_price, FundingPolicy, LifecyclePolicy, MarkPolicy,
+    MarketLifecycle, OracleHealth,
+};
+use percolator_prog::{
+    ix::Instruction as PercolatorInstruction,
+    processor::{ASSET_ACTION_ACTIVATE, ASSET_ACTION_DRAIN_ONLY},
+    state as percolator_state,
+};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     clock::Clock,
@@ -21,8 +29,8 @@ use solana_program::{
 
 const CONFIG_MAGIC: u64 = 0x4d4f_5849_4543_4647;
 const RECORD_MAGIC: u64 = 0x4d4f_5849_454d_4b54;
-pub const CONFIG_LEN: usize = 200;
-pub const RECORD_LEN: usize = 344;
+pub const CONFIG_LEN: usize = 240;
+pub const RECORD_LEN: usize = 384;
 pub const CONFIG_SEED: &[u8] = b"config";
 pub const MARKET_SEED: &[u8] = b"imported";
 const MAX_FUTURE_SKEW_SECS: i64 = 5;
@@ -56,6 +64,7 @@ pub struct Config {
     pub max_observation_age_secs: u64,
     pub mark_policy: MarkPolicy,
     pub max_source_spread_e6: u64,
+    pub funding_policy: FundingPolicy,
 }
 
 impl Config {
@@ -78,6 +87,13 @@ impl Config {
                 max_mark_deviation_e6: read_u64(data, 176)?,
             },
             max_source_spread_e6: read_u64(data, 184)?,
+            funding_policy: FundingPolicy {
+                coefficient_bps: read_u32(data, 192)?,
+                premium_cap_e6: read_u64(data, 200)?,
+                rate_cap_e6: read_u64(data, 208)?,
+                boundary_start_e6: read_u64(data, 216)?,
+                boundary_min_cap_e6: read_u64(data, 224)?,
+            },
         })
     }
 
@@ -100,6 +116,11 @@ impl Config {
         data[168..176].copy_from_slice(&self.mark_policy.max_basis_e6.to_le_bytes());
         data[176..184].copy_from_slice(&self.mark_policy.max_mark_deviation_e6.to_le_bytes());
         data[184..192].copy_from_slice(&self.max_source_spread_e6.to_le_bytes());
+        data[192..196].copy_from_slice(&self.funding_policy.coefficient_bps.to_le_bytes());
+        data[200..208].copy_from_slice(&self.funding_policy.premium_cap_e6.to_le_bytes());
+        data[208..216].copy_from_slice(&self.funding_policy.rate_cap_e6.to_le_bytes());
+        data[216..224].copy_from_slice(&self.funding_policy.boundary_start_e6.to_le_bytes());
+        data[224..232].copy_from_slice(&self.funding_policy.boundary_min_cap_e6.to_le_bytes());
         Ok(())
     }
 }
@@ -128,6 +149,9 @@ pub struct ImportedPerpMarket {
     pub basis_ema_e6: i64,
     pub oracle_health: u8,
     pub status: u8,
+    pub lifecycle: LifecyclePolicy,
+    pub last_funding_premium_e6: i64,
+    pub last_funding_unit_e6: i64,
 }
 
 impl ImportedPerpMarket {
@@ -158,6 +182,13 @@ impl ImportedPerpMarket {
             last_local_impact_ask_e6: read_u64(data, 320)?,
             basis_ema_e6: read_i64(data, 328)?,
             oracle_health: data[336],
+            lifecycle: LifecyclePolicy {
+                restricted_at: read_i64(data, 344)?,
+                reduce_only_at: read_i64(data, 352)?,
+                hard_flat_at: read_i64(data, 360)?,
+            },
+            last_funding_premium_e6: read_i64(data, 368)?,
+            last_funding_unit_e6: read_i64(data, 376)?,
         })
     }
 
@@ -190,6 +221,11 @@ impl ImportedPerpMarket {
         data[320..328].copy_from_slice(&self.last_local_impact_ask_e6.to_le_bytes());
         data[328..336].copy_from_slice(&self.basis_ema_e6.to_le_bytes());
         data[336] = self.oracle_health;
+        data[344..352].copy_from_slice(&self.lifecycle.restricted_at.to_le_bytes());
+        data[352..360].copy_from_slice(&self.lifecycle.reduce_only_at.to_le_bytes());
+        data[360..368].copy_from_slice(&self.lifecycle.hard_flat_at.to_le_bytes());
+        data[368..376].copy_from_slice(&self.last_funding_premium_e6.to_le_bytes());
+        data[376..384].copy_from_slice(&self.last_funding_unit_e6.to_le_bytes());
         Ok(())
     }
 }
@@ -206,6 +242,7 @@ struct ActivationArgs {
     market_id: u64,
     initial_mark_e6: u64,
     now_slot: u64,
+    lifecycle: LifecyclePolicy,
 }
 
 #[derive(Clone, Copy)]
@@ -224,6 +261,17 @@ struct PricingObservationArgs {
     oracle_health: u8,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct ResolutionArgs {
+    external_market_id_hash: [u8; 32],
+    rules_hash: [u8; 32],
+    asset_index: u16,
+    market_id: u64,
+    outcome: u8,
+    source_timestamp: i64,
+    sequence: u64,
+}
+
 pub fn process_instruction(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -240,12 +288,149 @@ pub fn process_instruction(
         2 => Err(MoxieError::InvalidInstruction.into()),
         3 => set_paused(program_id, accounts, data),
         4 => submit_pricing_observation(program_id, accounts, parse_pricing_observation(data)?),
+        5 => activate_imported_perp(program_id, accounts, parse_activation_v2(data)?),
+        6 => advance_lifecycle(program_id, accounts),
+        7 => hard_flat_portfolio(program_id, accounts, data),
+        8 => submit_resolution(program_id, accounts, parse_resolution(data)?),
         _ => Err(MoxieError::InvalidInstruction.into()),
     }
 }
 
+fn submit_resolution(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    args: ResolutionArgs,
+) -> ProgramResult {
+    let mut iter = accounts.iter();
+    let reporter = next_account_info(&mut iter)?;
+    let config_ai = next_account_info(&mut iter)?;
+    let record_ai = next_account_info(&mut iter)?;
+    let market = next_account_info(&mut iter)?;
+    let percolator_program = next_account_info(&mut iter)?;
+    require_signer(reporter)?;
+    let config = load_config(program_id, config_ai)?;
+    if config.paused {
+        return Err(MoxieError::Paused.into());
+    }
+    if reporter.key != &config.reporter || record_ai.owner != program_id || !record_ai.is_writable {
+        return Err(MoxieError::Unauthorized.into());
+    }
+    require_percolator_accounts(&config, market, percolator_program)?;
+    let mut record = ImportedPerpMarket::read(&record_ai.try_borrow_data()?)?;
+    if record.external_market_id_hash != args.external_market_id_hash
+        || record.rules_hash != args.rules_hash
+        || record.percolator_market_group != *market.key
+        || record.percolator_asset_index != args.asset_index
+        || record.percolator_market_id != args.market_id
+        || record.reporter != *reporter.key
+    {
+        return Err(MoxieError::IdentityMismatch.into());
+    }
+    if args.outcome > 1 {
+        return Err(MoxieError::InvalidProbability.into());
+    }
+    let current = MarketLifecycle::try_from(record.status)
+        .map_err(|_| ProgramError::from(MoxieError::InvalidAccount))?;
+    if current != MarketLifecycle::Locked {
+        return Err(MoxieError::Paused.into());
+    }
+    let clock = Clock::get()?;
+    if clock.unix_timestamp < record.external_close_time
+        || args.source_timestamp < record.external_close_time
+        || args.source_timestamp > clock.unix_timestamp.saturating_add(MAX_FUTURE_SKEW_SECS)
+        || args.source_timestamp <= record.last_source_timestamp
+    {
+        return Err(MoxieError::StaleObservation.into());
+    }
+    let expected_sequence = record
+        .last_observation_sequence
+        .checked_add(1)
+        .ok_or(MoxieError::SequenceMismatch)?;
+    if args.sequence != expected_sequence {
+        return Err(MoxieError::SequenceMismatch.into());
+    }
+    let terminal_e6 = u64::from(args.outcome) * 1_000_000;
+    record.last_source_timestamp = args.source_timestamp;
+    record.last_observation_slot = clock.slot;
+    record.last_observation_sequence = args.sequence;
+    record.last_mark_e6 = terminal_e6;
+    record.last_index_e6 = terminal_e6;
+    record.last_external_impact_bid_e6 = terminal_e6;
+    record.last_external_impact_ask_e6 = terminal_e6;
+    record.last_local_impact_bid_e6 = terminal_e6;
+    record.last_local_impact_ask_e6 = terminal_e6;
+    record.basis_ema_e6 = 0;
+    record.last_funding_premium_e6 = 0;
+    record.last_funding_unit_e6 = 0;
+    record.status = MarketLifecycle::Resolved as u8;
+    record.write(&mut record_ai.try_borrow_mut_data()?)
+}
+
+fn hard_flat_portfolio(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
+    if data.len() != 48 {
+        return Err(MoxieError::InvalidInstruction.into());
+    }
+    let mut iter = accounts.iter();
+    let admin = next_account_info(&mut iter)?;
+    let config_ai = next_account_info(&mut iter)?;
+    let record_ai = next_account_info(&mut iter)?;
+    let market = next_account_info(&mut iter)?;
+    let account_a = next_account_info(&mut iter)?;
+    let account_b = next_account_info(&mut iter)?;
+    let percolator_program = next_account_info(&mut iter)?;
+    require_signer(admin)?;
+    let config = load_config(program_id, config_ai)?;
+    if config.paused
+        || admin.key != &config.admin
+        || record_ai.owner != program_id
+        || !record_ai.is_writable
+        || !account_a.is_writable
+        || !account_b.is_writable
+    {
+        return Err(MoxieError::Unauthorized.into());
+    }
+    require_percolator_accounts(&config, market, percolator_program)?;
+    let mut record = ImportedPerpMarket::read(&record_ai.try_borrow_data()?)?;
+    let clock = Clock::get()?;
+    if clock.unix_timestamp < record.lifecycle.hard_flat_at {
+        return Err(MoxieError::Paused.into());
+    }
+    let account_a_portfolio_id = read_u64(data, 0)?;
+    let account_a_position_epoch = read_u64(data, 8)?;
+    let account_b_portfolio_id = read_u64(data, 16)?;
+    let account_b_position_epoch = read_u64(data, 24)?;
+    let reduce_q = read_u128(data, 32)?;
+    if reduce_q == 0 {
+        return Err(MoxieError::InvalidInstruction.into());
+    }
+    cpi_percolator(
+        percolator_program,
+        &[admin.clone(), market.clone(), account_a.clone(), account_b.clone()],
+        PercolatorInstruction::MoxieHardFlat {
+            account_a_portfolio_id,
+            account_a_position_epoch,
+            account_b_portfolio_id,
+            account_b_position_epoch,
+            asset_index: record.percolator_asset_index,
+            market_id: record.percolator_market_id,
+            reduce_q,
+        },
+        vec![
+            AccountMeta::new_readonly(*admin.key, true),
+            AccountMeta::new(*market.key, false),
+            AccountMeta::new(*account_a.key, false),
+            AccountMeta::new(*account_b.key, false),
+        ],
+    )?;
+    // Keep the record reduce-only while the keeper batches every portfolio.
+    // The lifecycle crank enters Percolator DrainOnly only after the batch.
+    record.status = MarketLifecycle::ReduceOnly as u8;
+    record.last_funding_unit_e6 = 0;
+    record.write(&mut record_ai.try_borrow_mut_data()?)
+}
+
 fn initialize_config(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> ProgramResult {
-    if data.len() != 40 && data.len() != 80 {
+    if data.len() != 40 && data.len() != 80 && data.len() != 120 {
         return Err(MoxieError::InvalidInstruction.into());
     }
     let mut iter = accounts.iter();
@@ -270,7 +455,7 @@ fn initialize_config(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8])
     }
     let reporter = read_pubkey(data, 0)?;
     let max_age = read_u64(data, 32)?;
-    let (mark_policy, max_source_spread_e6) = if data.len() == 80 {
+    let (mark_policy, max_source_spread_e6) = if data.len() >= 80 {
         (
             MarkPolicy {
                 epsilon_e6: read_u64(data, 40)?,
@@ -293,6 +478,23 @@ fn initialize_config(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8])
             100_000,
         )
     };
+    let funding_policy = if data.len() == 120 {
+        FundingPolicy {
+            coefficient_bps: read_u32(data, 80)?,
+            premium_cap_e6: read_u64(data, 88)?,
+            rate_cap_e6: read_u64(data, 96)?,
+            boundary_start_e6: read_u64(data, 104)?,
+            boundary_min_cap_e6: read_u64(data, 112)?,
+        }
+    } else {
+        FundingPolicy {
+            coefficient_bps: 10,
+            premium_cap_e6: 50_000,
+            rate_cap_e6: 5_000,
+            boundary_start_e6: 150_000,
+            boundary_min_cap_e6: 500,
+        }
+    };
     if reporter == Pubkey::default()
         || max_age == 0
         || max_age > 3_600
@@ -303,6 +505,7 @@ fn initialize_config(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8])
         || mark_policy.max_mark_deviation_e6 > 500_000
         || max_source_spread_e6 == 0
         || max_source_spread_e6 > 500_000
+        || bounded_funding_unit_e6(0, 500_000, &funding_policy).is_none()
     {
         return Err(MoxieError::InvalidInstruction.into());
     }
@@ -326,6 +529,7 @@ fn initialize_config(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8])
         max_observation_age_secs: max_age,
         mark_policy,
         max_source_spread_e6,
+        funding_policy,
     }
     .write(&mut config.try_borrow_mut_data()?)
 }
@@ -362,6 +566,8 @@ fn activate_imported_perp(
         || args.now_slot > clock.slot
         || args.external_market_id_hash == [0; 32]
         || args.rules_hash == [0; 32]
+        || lifecycle_for_time(&args.lifecycle, clock.unix_timestamp).is_none()
+        || args.lifecycle.hard_flat_at >= args.external_close_time
     {
         return Err(MoxieError::InvalidInstruction.into());
     }
@@ -452,7 +658,10 @@ fn activate_imported_perp(
         last_local_impact_ask_e6: args.initial_mark_e6,
         basis_ema_e6: 0,
         oracle_health: OracleHealth::Healthy as u8,
-        status: 1,
+        status: MarketLifecycle::Active as u8,
+        lifecycle: args.lifecycle,
+        last_funding_premium_e6: 0,
+        last_funding_unit_e6: 0,
     }
     .write(&mut record_ai.try_borrow_mut_data()?)
 }
@@ -478,8 +687,7 @@ fn submit_pricing_observation(
     }
     require_percolator_accounts(&config, market, percolator_program)?;
     let mut record = ImportedPerpMarket::read(&record_ai.try_borrow_data()?)?;
-    if record.status != 1
-        || record.external_market_id_hash != args.external_market_id_hash
+    if record.external_market_id_hash != args.external_market_id_hash
         || record.rules_hash != args.rules_hash
         || record.percolator_market_group != *market.key
         || record.percolator_asset_index != args.asset_index
@@ -516,6 +724,15 @@ fn submit_pricing_observation(
         return Err(MoxieError::InvalidProbability.into());
     }
     let clock = Clock::get()?;
+    let current_lifecycle = MarketLifecycle::try_from(record.status)
+        .map_err(|_| ProgramError::from(MoxieError::InvalidAccount))?;
+    let timed_lifecycle = lifecycle_for_time(&record.lifecycle, clock.unix_timestamp)
+        .ok_or(MoxieError::InvalidAccount)?;
+    if !transition_is_monotonic(current_lifecycle, timed_lifecycle)
+        || matches!(timed_lifecycle, MarketLifecycle::Locked | MarketLifecycle::Resolved)
+    {
+        return Err(MoxieError::Paused.into());
+    }
     validate_observation_clock(
         &config,
         &record,
@@ -532,6 +749,39 @@ fn submit_pricing_observation(
         health,
     )
     .ok_or(MoxieError::InvalidProbability)?;
+    let funding_premium = funding_premium_e6(
+        args.local_impact_bid_e6,
+        args.local_impact_ask_e6,
+        args.index_e6,
+    )
+    .ok_or(MoxieError::InvalidProbability)?;
+    let policy_funding_unit = if timed_lifecycle >= MarketLifecycle::ReduceOnly {
+        0
+    } else {
+        bounded_funding_unit_e6(funding_premium, args.index_e6, &config.funding_policy)
+            .ok_or(MoxieError::InvalidProbability)?
+    };
+    let max_rate_e9 = percolator_state::read_market_max_abs_funding_e9_per_slot(
+        &market.try_borrow_data()?,
+    )?;
+    let engine_cap_e6 = u64::try_from(
+        u128::from(max_rate_e9)
+            .checked_mul(u128::from(mark.mark_e6))
+            .ok_or(MoxieError::InvalidProbability)?
+            / 1_000_000_000u128,
+    )
+    .map_err(|_| MoxieError::InvalidProbability)?;
+    let engine_cap_e6 = i64::try_from(engine_cap_e6).map_err(|_| MoxieError::InvalidProbability)?;
+    let funding_unit = policy_funding_unit.clamp(-engine_cap_e6, engine_cap_e6);
+    // Percolator tag 70 interprets this checkpoint as a signed, absolute
+    // probability-point funding unit around 500_000, not as a price.
+    let funding_mark = 500_000i128
+        .checked_add(i128::from(funding_unit))
+        .ok_or(MoxieError::InvalidProbability)?;
+    if !(1..1_000_000).contains(&funding_mark) {
+        return Err(MoxieError::InvalidProbability.into());
+    }
+    let funding_mark_e6 = u64::try_from(funding_mark).map_err(|_| MoxieError::InvalidProbability)?;
 
     record.last_source_timestamp = args.source_timestamp;
     record.last_observation_slot = clock.slot;
@@ -544,15 +794,25 @@ fn submit_pricing_observation(
     record.last_local_impact_ask_e6 = args.local_impact_ask_e6;
     record.basis_ema_e6 = mark.basis_ema_e6;
     record.oracle_health = args.oracle_health;
+    // Entering Percolator DrainOnly requires the market authority CPI in the
+    // lifecycle crank. A reporter observation may advance only Active -> Restricted.
+    record.status = if timed_lifecycle >= MarketLifecycle::ReduceOnly {
+        current_lifecycle as u8
+    } else {
+        timed_lifecycle as u8
+    };
+    record.last_funding_premium_e6 = funding_premium;
+    record.last_funding_unit_e6 = funding_unit;
     record.write(&mut record_ai.try_borrow_mut_data()?)?;
     cpi_percolator(
         percolator_program,
         &[reporter.clone(), market.clone()],
-        PercolatorInstruction::PushAuthMark {
+        PercolatorInstruction::PushAuthMarkWithFunding {
             asset_index: args.asset_index,
             market_id: args.market_id,
             now_slot: clock.slot,
             mark_e6: mark.mark_e6,
+            funding_mark_e6,
             observation_sequence: args.sequence,
             authority_epoch: 0,
         },
@@ -597,6 +857,64 @@ fn set_paused(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> Pro
     }
     config.paused = data[0] == 1;
     config.write(&mut config_ai.try_borrow_mut_data()?)
+}
+
+fn advance_lifecycle(program_id: &Pubkey, accounts: &[AccountInfo]) -> ProgramResult {
+    let mut iter = accounts.iter();
+    let admin = next_account_info(&mut iter)?;
+    let config_ai = next_account_info(&mut iter)?;
+    let record_ai = next_account_info(&mut iter)?;
+    let market = next_account_info(&mut iter)?;
+    let percolator_program = next_account_info(&mut iter)?;
+    require_signer(admin)?;
+    let config = load_config(program_id, config_ai)?;
+    if config.paused || admin.key != &config.admin || record_ai.owner != program_id || !record_ai.is_writable {
+        return Err(MoxieError::Unauthorized.into());
+    }
+    require_percolator_accounts(&config, market, percolator_program)?;
+    let mut record = ImportedPerpMarket::read(&record_ai.try_borrow_data()?)?;
+    let current = MarketLifecycle::try_from(record.status)
+        .map_err(|_| ProgramError::from(MoxieError::InvalidAccount))?;
+    let clock = Clock::get()?;
+    let next = lifecycle_for_time(&record.lifecycle, clock.unix_timestamp)
+        .ok_or(MoxieError::InvalidAccount)?;
+    if next == current {
+        return Ok(());
+    }
+    if !transition_is_monotonic(current, next) {
+        return Err(MoxieError::InvalidInstruction.into());
+    }
+    let must_enter_drain_only =
+        (current < MarketLifecycle::ReduceOnly && next >= MarketLifecycle::ReduceOnly)
+            || (current == MarketLifecycle::ReduceOnly && next >= MarketLifecycle::Locked);
+    if must_enter_drain_only {
+        cpi_percolator(
+            percolator_program,
+            &[admin.clone(), market.clone()],
+            PercolatorInstruction::UpdateAssetLifecycle {
+                action: ASSET_ACTION_DRAIN_ONLY,
+                asset_index: record.percolator_asset_index,
+                market_id: record.percolator_market_id,
+                authority_epoch: 0,
+                now_slot: 0,
+                initial_price: 0,
+                max_init_fee: 0,
+                insurance_authority: [0; 32],
+                insurance_operator: [0; 32],
+                backing_bucket_authority: [0; 32],
+                oracle_authority: [0; 32],
+            },
+            vec![
+                AccountMeta::new_readonly(*admin.key, true),
+                AccountMeta::new(*market.key, false),
+            ],
+        )?;
+    }
+    record.status = next as u8;
+    if next >= MarketLifecycle::ReduceOnly {
+        record.last_funding_unit_e6 = 0;
+    }
+    record.write(&mut record_ai.try_borrow_mut_data()?)
 }
 
 fn load_config(program_id: &Pubkey, account: &AccountInfo) -> Result<Config, ProgramError> {
@@ -657,6 +975,26 @@ fn parse_activation(data: &[u8]) -> Result<ActivationArgs, ProgramError> {
     if data.len() != 194 {
         return Err(MoxieError::InvalidInstruction.into());
     }
+    let external_close_time = read_i64(data, 160)?;
+    Ok(ActivationArgs {
+        external_market_id_hash: read_array_32(data, 0)?,
+        external_yes_id_hash: read_array_32(data, 32)?,
+        external_no_id_hash: read_array_32(data, 64)?,
+        title_hash: read_array_32(data, 96)?,
+        rules_hash: read_array_32(data, 128)?,
+        external_close_time,
+        asset_index: read_u16(data, 168)?,
+        market_id: read_u64(data, 170)?,
+        initial_mark_e6: read_u64(data, 178)?,
+        now_slot: read_u64(data, 186)?,
+        lifecycle: default_lifecycle(external_close_time)?,
+    })
+}
+
+fn parse_activation_v2(data: &[u8]) -> Result<ActivationArgs, ProgramError> {
+    if data.len() != 218 {
+        return Err(MoxieError::InvalidInstruction.into());
+    }
     Ok(ActivationArgs {
         external_market_id_hash: read_array_32(data, 0)?,
         external_yes_id_hash: read_array_32(data, 32)?,
@@ -668,6 +1006,25 @@ fn parse_activation(data: &[u8]) -> Result<ActivationArgs, ProgramError> {
         market_id: read_u64(data, 170)?,
         initial_mark_e6: read_u64(data, 178)?,
         now_slot: read_u64(data, 186)?,
+        lifecycle: LifecyclePolicy {
+            restricted_at: read_i64(data, 194)?,
+            reduce_only_at: read_i64(data, 202)?,
+            hard_flat_at: read_i64(data, 210)?,
+        },
+    })
+}
+
+fn default_lifecycle(external_close_time: i64) -> Result<LifecyclePolicy, ProgramError> {
+    Ok(LifecyclePolicy {
+        restricted_at: external_close_time
+            .checked_sub(1_800)
+            .ok_or(MoxieError::InvalidInstruction)?,
+        reduce_only_at: external_close_time
+            .checked_sub(600)
+            .ok_or(MoxieError::InvalidInstruction)?,
+        hard_flat_at: external_close_time
+            .checked_sub(60)
+            .ok_or(MoxieError::InvalidInstruction)?,
     })
 }
 
@@ -688,6 +1045,21 @@ fn parse_pricing_observation(data: &[u8]) -> Result<PricingObservationArgs, Prog
         source_timestamp: read_i64(data, 114)?,
         sequence: read_u64(data, 122)?,
         oracle_health: data[130],
+    })
+}
+
+fn parse_resolution(data: &[u8]) -> Result<ResolutionArgs, ProgramError> {
+    if data.len() != 91 {
+        return Err(MoxieError::InvalidInstruction.into());
+    }
+    Ok(ResolutionArgs {
+        external_market_id_hash: read_array_32(data, 0)?,
+        rules_hash: read_array_32(data, 32)?,
+        asset_index: read_u16(data, 64)?,
+        market_id: read_u64(data, 66)?,
+        outcome: data[74],
+        source_timestamp: read_i64(data, 75)?,
+        sequence: read_u64(data, 83)?,
     })
 }
 
@@ -720,6 +1092,14 @@ fn read_u16(data: &[u8], offset: usize) -> Result<u16, ProgramError> {
 fn read_u64(data: &[u8], offset: usize) -> Result<u64, ProgramError> {
     Ok(u64::from_le_bytes(
         data.get(offset..offset + 8)
+            .ok_or(MoxieError::InvalidInstruction)?
+            .try_into()
+            .unwrap(),
+    ))
+}
+fn read_u128(data: &[u8], offset: usize) -> Result<u128, ProgramError> {
+    Ok(u128::from_le_bytes(
+        data.get(offset..offset + 16)
             .ok_or(MoxieError::InvalidInstruction)?
             .try_into()
             .unwrap(),
@@ -765,7 +1145,14 @@ mod tests {
             last_local_impact_ask_e6: 652_000,
             basis_ema_e6: 2_000,
             oracle_health: OracleHealth::Healthy as u8,
-            status: 1,
+            status: MarketLifecycle::Active as u8,
+            lifecycle: LifecyclePolicy {
+                restricted_at: 1_000,
+                reduce_only_at: 2_000,
+                hard_flat_at: 3_000,
+            },
+            last_funding_premium_e6: 8_000,
+            last_funding_unit_e6: 800,
         };
         let mut bytes = [0u8; RECORD_LEN];
         record.write(&mut bytes).unwrap();
@@ -796,5 +1183,26 @@ mod tests {
         assert_eq!(parsed.index_e6, 600_000);
         assert_eq!(parsed.local_impact_ask_e6, 610_000);
         assert_eq!(parsed.oracle_health, 1);
+    }
+
+    #[test]
+    fn resolution_layout_is_identity_bound() {
+        let mut bytes = vec![0u8; 91];
+        bytes[0..32].copy_from_slice(&[1; 32]);
+        bytes[32..64].copy_from_slice(&[2; 32]);
+        bytes[64..66].copy_from_slice(&7u16.to_le_bytes());
+        bytes[66..74].copy_from_slice(&42u64.to_le_bytes());
+        bytes[74] = 1;
+        bytes[75..83].copy_from_slice(&123i64.to_le_bytes());
+        bytes[83..91].copy_from_slice(&4u64.to_le_bytes());
+        let parsed = parse_resolution(&bytes).unwrap();
+        assert_eq!(parsed.external_market_id_hash, [1; 32]);
+        assert_eq!(parsed.rules_hash, [2; 32]);
+        assert_eq!(parsed.asset_index, 7);
+        assert_eq!(parsed.market_id, 42);
+        assert_eq!(parsed.outcome, 1);
+        assert_eq!(parsed.source_timestamp, 123);
+        assert_eq!(parsed.sequence, 4);
+        assert!(parse_resolution(&bytes[..90]).is_err());
     }
 }

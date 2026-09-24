@@ -1,4 +1,5 @@
 # Keeper
 
-Phase 9 service boundary for permissionless maintenance and liquidation cranks.
-
+Permissionless maintenance planner for oracle refreshes, funding cranks, liquidation,
+deadline hard-flat work, and resolution monitoring. Planning is derived entirely from
+chain state so a restart or duplicate attempt cannot lose an off-chain cursor.

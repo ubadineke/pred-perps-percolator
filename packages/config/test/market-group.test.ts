@@ -12,7 +12,7 @@ test("the checked-in V1 market group is valid and maps to InitMarket", () => {
   assert.equal(init.initial_price, 500_000);
   assert.equal(init.initial_margin_bps, 10_000);
   assert.equal(init.maintenance_margin_bps, 10_000);
-  assert.equal(init.max_abs_funding_e9_per_slot, 0);
+  assert.equal(init.max_abs_funding_e9_per_slot, 10_000);
 });
 
 test("initial margin cannot be below maintenance margin", () => {

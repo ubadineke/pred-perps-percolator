@@ -1,7 +1,10 @@
 #![no_std]
 extern crate alloc;
 use alloc::format;
-use moxie_probability_math::{valid_live_price, BPS_SCALE};
+use moxie_probability_math::{
+    is_reduce_only_delta, lifecycle_for_time, valid_live_price, LifecyclePolicy, MarketLifecycle,
+    BPS_SCALE,
+};
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
     clock::Clock,
@@ -34,6 +37,9 @@ pub struct Config {
     pub max_fill_abs: u128,
     pub max_inventory_abs: u128,
     pub inventory_base: i128,
+    pub lifecycle: LifecyclePolicy,
+    pub restricted_fill_bps: u32,
+    pub restricted_capacity_bps: u32,
     pub paused: bool,
 }
 #[derive(Clone, Copy)]
@@ -61,6 +67,7 @@ pub fn process_instruction(
         Some(2) => process_initialize(program_id, accounts, data),
         Some(4) => process_pause(program_id, accounts, data),
         Some(5) => process_initialize_v2(program_id, accounts, data),
+        Some(6) => process_initialize_v3(program_id, accounts, data),
         _ => Err(ProgramError::InvalidInstructionData),
     }
 }
@@ -115,6 +122,13 @@ fn process_initialize(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]
         max_fill_abs: read_u128(data, 49)?,
         max_inventory_abs: read_u128(data, 65)?,
         inventory_base: 0,
+        lifecycle: LifecyclePolicy {
+            restricted_at: i64::MAX - 2,
+            reduce_only_at: i64::MAX - 1,
+            hard_flat_at: i64::MAX,
+        },
+        restricted_fill_bps: BPS_SCALE as u32,
+        restricted_capacity_bps: BPS_SCALE as u32,
         paused: false,
     };
     validate_config(&cfg)?;
@@ -173,6 +187,78 @@ fn process_initialize_v2(
         max_inventory_abs: read_u128(data, 73)?,
         epsilon_e6: read_u32(data, 89)?,
         inventory_base: 0,
+        lifecycle: LifecyclePolicy {
+            restricted_at: i64::MAX - 2,
+            reduce_only_at: i64::MAX - 1,
+            hard_flat_at: i64::MAX,
+        },
+        restricted_fill_bps: BPS_SCALE as u32,
+        restricted_capacity_bps: BPS_SCALE as u32,
+        paused: false,
+    };
+    validate_config(&cfg)?;
+    write_config(&mut bytes, &cfg)
+}
+
+fn process_initialize_v3(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    data: &[u8],
+) -> ProgramResult {
+    if data.len() != 125 {
+        return Err(ProgramError::InvalidInstructionData);
+    }
+    let mut it = accounts.iter();
+    let owner = next_account_info(&mut it)?;
+    let delegate = next_account_info(&mut it)?;
+    let context = next_account_info(&mut it)?;
+    let percolator = next_account_info(&mut it)?;
+    let market = next_account_info(&mut it)?;
+    let portfolio = next_account_info(&mut it)?;
+    if !owner.is_signer || !context.is_writable || context.owner != program_id {
+        return Err(ProgramError::InvalidAccountData);
+    }
+    let (expected, _) = Pubkey::find_program_address(
+        &[
+            b"matcher",
+            market.key.as_ref(),
+            portfolio.key.as_ref(),
+            owner.key.as_ref(),
+            program_id.as_ref(),
+            context.key.as_ref(),
+        ],
+        percolator.key,
+    );
+    if expected != *delegate.key {
+        return Err(ProgramError::InvalidSeeds);
+    }
+    let mut bytes = context.try_borrow_mut_data()?;
+    if bytes.len() != CONTEXT_LEN || read_u64(&bytes, STATE)? != 0 {
+        return Err(ProgramError::AccountAlreadyInitialized);
+    }
+    let cfg = Config {
+        delegate: *delegate.key,
+        base_spread_e6: read_u32(data, 1)?,
+        max_total_adjustment_e6: read_u32(data, 5)?,
+        size_coefficient_e6: read_u32(data, 9)?,
+        skew_coefficient_e6: read_u32(data, 13)?,
+        oracle_health_charge_e6: read_u32(data, 17)?,
+        divergence_charge_e6: read_u32(data, 21)?,
+        lock_charge_e6: read_u32(data, 25)?,
+        hedge_charge_e6: read_u32(data, 29)?,
+        expiry_slot: read_u64(data, 33)?,
+        liquidity_notional_e6: read_u128(data, 41)?,
+        max_fill_abs: read_u128(data, 57)?,
+        max_inventory_abs: read_u128(data, 73)?,
+        epsilon_e6: read_u32(data, 89)?,
+        inventory_base: 0,
+        lifecycle: LifecyclePolicy {
+            restricted_at: read_i64(data, 93)?,
+            reduce_only_at: read_i64(data, 101)?,
+            hard_flat_at: read_i64(data, 109)?,
+        },
+        restricted_fill_bps: read_u32(data, 117)?,
+        restricted_capacity_bps: read_u32(data, 121)?,
         paused: false,
     };
     validate_config(&cfg)?;
@@ -191,7 +277,14 @@ fn process_match(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> 
     if cfg.delegate != *delegate.key {
         return Err(ProgramError::InvalidSeeds);
     }
-    match quote(&cfg, call.oracle, call.size, Clock::get()?.slot) {
+    let clock = Clock::get()?;
+    match quote(
+        &cfg,
+        call.oracle,
+        call.size,
+        clock.slot,
+        clock.unix_timestamp,
+    ) {
         Some(fill) => {
             cfg.inventory_base = fill.next_inventory;
             write_config(&mut bytes, &cfg)?;
@@ -217,7 +310,7 @@ fn process_pause(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> 
 }
 
 /// Deterministic full-fill-or-reject quote. Percolator enforces the signed user limit.
-pub fn quote(c: &Config, oracle: u64, requested: i128, slot: u64) -> Option<Quote> {
+pub fn quote(c: &Config, oracle: u64, requested: i128, slot: u64, now: i64) -> Option<Quote> {
     if c.paused
         || slot > c.expiry_slot
         || !valid_live_price(oracle, u64::from(c.epsilon_e6))
@@ -225,12 +318,32 @@ pub fn quote(c: &Config, oracle: u64, requested: i128, slot: u64) -> Option<Quot
     {
         return None;
     }
+    let lifecycle = lifecycle_for_time(&c.lifecycle, now)?;
+    if matches!(lifecycle, MarketLifecycle::Locked | MarketLifecycle::Resolved) {
+        return None;
+    }
+    if lifecycle == MarketLifecycle::ReduceOnly && !is_reduce_only_delta(c.inventory_base, -requested)
+    {
+        return None;
+    }
     let abs = requested.unsigned_abs();
-    if abs > c.max_fill_abs {
+    let (fill_cap, inventory_cap) = if lifecycle == MarketLifecycle::Restricted {
+        (
+            c.max_fill_abs
+                .checked_mul(u128::from(c.restricted_fill_bps))?
+                .checked_div(u128::from(BPS_SCALE))?,
+            c.max_inventory_abs
+                .checked_mul(u128::from(c.restricted_capacity_bps))?
+                .checked_div(u128::from(BPS_SCALE))?,
+        )
+    } else {
+        (c.max_fill_abs, c.max_inventory_abs)
+    };
+    if abs > fill_cap {
         return None;
     }
     let next = c.inventory_base.checked_sub(requested)?;
-    if next.unsigned_abs() > c.max_inventory_abs {
+    if next.unsigned_abs() > inventory_cap {
         return None;
     }
     let capacity = c.max_inventory_abs;
@@ -284,6 +397,11 @@ fn validate_config(c: &Config) -> ProgramResult {
         || c.liquidity_notional_e6 == 0
         || c.max_fill_abs == 0
         || c.max_inventory_abs == 0
+        || c.restricted_fill_bps == 0
+        || c.restricted_fill_bps > BPS_SCALE as u32
+        || c.restricted_capacity_bps == 0
+        || c.restricted_capacity_bps > BPS_SCALE as u32
+        || lifecycle_for_time(&c.lifecycle, c.lifecycle.restricted_at).is_none()
     {
         Err(ProgramError::InvalidArgument)
     } else {
@@ -349,6 +467,11 @@ fn write_config(d: &mut [u8], c: &Config) -> ProgramResult {
     d[STATE + 96..STATE + 112].copy_from_slice(&c.max_fill_abs.to_le_bytes());
     d[STATE + 112..STATE + 128].copy_from_slice(&c.max_inventory_abs.to_le_bytes());
     d[STATE + 128..STATE + 144].copy_from_slice(&c.inventory_base.to_le_bytes());
+    d[STATE + 156..STATE + 164].copy_from_slice(&c.lifecycle.restricted_at.to_le_bytes());
+    d[STATE + 164..STATE + 172].copy_from_slice(&c.lifecycle.reduce_only_at.to_le_bytes());
+    d[STATE + 172..STATE + 180].copy_from_slice(&c.lifecycle.hard_flat_at.to_le_bytes());
+    d[STATE + 180..STATE + 184].copy_from_slice(&c.restricted_fill_bps.to_le_bytes());
+    d[STATE + 184..STATE + 188].copy_from_slice(&c.restricted_capacity_bps.to_le_bytes());
     Ok(())
 }
 fn read_config(d: &[u8]) -> Result<Config, ProgramError> {
@@ -372,6 +495,13 @@ fn read_config(d: &[u8]) -> Result<Config, ProgramError> {
         divergence_charge_e6: read_u32(d, STATE + 144)?,
         lock_charge_e6: read_u32(d, STATE + 148)?,
         epsilon_e6: read_u32(d, STATE + 152)?,
+        lifecycle: LifecyclePolicy {
+            restricted_at: read_i64(d, STATE + 156)?,
+            reduce_only_at: read_i64(d, STATE + 164)?,
+            hard_flat_at: read_i64(d, STATE + 172)?,
+        },
+        restricted_fill_bps: read_u32(d, STATE + 180)?,
+        restricted_capacity_bps: read_u32(d, STATE + 184)?,
     })
 }
 fn read_u16(d: &[u8], o: usize) -> Result<u16, ProgramError> {
@@ -414,6 +544,14 @@ fn read_i128(d: &[u8], o: usize) -> Result<i128, ProgramError> {
             .unwrap(),
     ))
 }
+fn read_i64(d: &[u8], o: usize) -> Result<i64, ProgramError> {
+    Ok(i64::from_le_bytes(
+        d.get(o..o + 8)
+            .ok_or(ProgramError::InvalidInstructionData)?
+            .try_into()
+            .unwrap(),
+    ))
+}
 
 #[cfg(test)]
 mod tests {
@@ -435,55 +573,74 @@ mod tests {
             max_fill_abs: 2_000_000,
             max_inventory_abs: 5_000_000,
             inventory_base: 0,
+            lifecycle: LifecyclePolicy {
+                restricted_at: 50,
+                reduce_only_at: 75,
+                hard_flat_at: 100,
+            },
+            restricted_fill_bps: 5_000,
+            restricted_capacity_bps: 7_500,
             paused: false,
         }
     }
     #[test]
     fn side_aware() {
-        let b = quote(&c(), 500_000, 1_000_000, 1).unwrap();
-        let s = quote(&c(), 500_000, -1_000_000, 1).unwrap();
+        let b = quote(&c(), 500_000, 1_000_000, 1, 1).unwrap();
+        let s = quote(&c(), 500_000, -1_000_000, 1, 1).unwrap();
         assert!(b.exec_price_e6 > 500_000);
         assert!(s.exec_price_e6 < 500_000);
         assert_eq!(b.next_inventory, -1_000_000)
     }
     #[test]
     fn fok_and_expiry() {
-        assert!(quote(&c(), 500_000, 2_000_001, 1).is_none());
-        assert!(quote(&c(), 500_000, 1, 101).is_none());
+        assert!(quote(&c(), 500_000, 2_000_001, 1, 1).is_none());
+        assert!(quote(&c(), 500_000, 1, 101, 1).is_none());
         let mut x = c();
         x.inventory_base = 5_000_000;
-        assert!(quote(&x, 500_000, -1, 1).is_none())
+        assert!(quote(&x, 500_000, -1, 1, 1).is_none())
     }
     #[test]
     fn skew_rewards_rebalance() {
-        let n = quote(&c(), 500_000, -1_000_000, 1).unwrap();
+        let n = quote(&c(), 500_000, -1_000_000, 1, 1).unwrap();
         let mut x = c();
         x.inventory_base = -2_000_000;
-        assert!(quote(&x, 500_000, -1_000_000, 1).unwrap().exec_price_e6 > n.exec_price_e6)
+        assert!(quote(&x, 500_000, -1_000_000, 1, 1).unwrap().exec_price_e6 > n.exec_price_e6)
     }
     #[test]
     fn larger_orders_have_worse_prices() {
-        let small_buy = quote(&c(), 500_000, 100_000, 1).unwrap();
-        let large_buy = quote(&c(), 500_000, 1_000_000, 1).unwrap();
-        let small_sell = quote(&c(), 500_000, -100_000, 1).unwrap();
-        let large_sell = quote(&c(), 500_000, -1_000_000, 1).unwrap();
+        let small_buy = quote(&c(), 500_000, 100_000, 1, 1).unwrap();
+        let large_buy = quote(&c(), 500_000, 1_000_000, 1, 1).unwrap();
+        let small_sell = quote(&c(), 500_000, -100_000, 1, 1).unwrap();
+        let large_sell = quote(&c(), 500_000, -1_000_000, 1, 1).unwrap();
         assert!(large_buy.exec_price_e6 > small_buy.exec_price_e6);
         assert!(large_sell.exec_price_e6 < small_sell.exec_price_e6);
     }
     #[test]
     fn live_bounds_and_overflow_fail_closed() {
         assert_eq!(
-            quote(&c(), 1_000, -2_000_000, 1).unwrap().exec_price_e6,
+            quote(&c(), 1_000, -2_000_000, 1, 1).unwrap().exec_price_e6,
             1_000
         );
         assert_eq!(
-            quote(&c(), 999_000, 2_000_000, 1).unwrap().exec_price_e6,
+            quote(&c(), 999_000, 2_000_000, 1, 1).unwrap().exec_price_e6,
             999_000
         );
-        assert!(quote(&c(), 999, 1, 1).is_none());
+        assert!(quote(&c(), 999, 1, 1, 1).is_none());
         let mut x = c();
         x.max_inventory_abs = u128::MAX;
         x.inventory_base = i128::MIN;
-        assert!(quote(&x, 500_000, 1, 1).is_none());
+        assert!(quote(&x, 500_000, 1, 1, 1).is_none());
+    }
+
+    #[test]
+    fn lock_clock_restricts_then_reduces_then_stops() {
+        assert!(quote(&c(), 500_000, 1_000_001, 1, 50).is_none());
+        assert!(quote(&c(), 500_000, 100_000, 1, 50).is_some());
+
+        let mut inventory = c();
+        inventory.inventory_base = -1_000_000;
+        assert!(quote(&inventory, 500_000, -500_000, 1, 75).is_some());
+        assert!(quote(&inventory, 500_000, 500_000, 1, 75).is_none());
+        assert!(quote(&inventory, 500_000, -1, 1, 100).is_none());
     }
 }

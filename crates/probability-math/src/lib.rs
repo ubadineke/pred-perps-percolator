@@ -43,6 +43,192 @@ pub struct MarkResult {
     pub basis_ema_e6: i64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
+pub enum MarketLifecycle {
+    Active = 1,
+    Restricted = 2,
+    ReduceOnly = 3,
+    Locked = 4,
+    Resolved = 5,
+}
+
+impl TryFrom<u8> for MarketLifecycle {
+    type Error = ();
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::Active),
+            2 => Ok(Self::Restricted),
+            3 => Ok(Self::ReduceOnly),
+            4 => Ok(Self::Locked),
+            5 => Ok(Self::Resolved),
+            _ => Err(()),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LifecyclePolicy {
+    pub restricted_at: i64,
+    pub reduce_only_at: i64,
+    pub hard_flat_at: i64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BinaryMarginPolicy {
+    pub jump_buffer_e6: u64,
+    pub liquidity_buffer_e6: u64,
+    pub oracle_buffer_e6: u64,
+    pub liquidation_buffer_e6: u64,
+    pub fee_buffer_e6: u64,
+    pub safety_buffer_e6: u64,
+    pub maintenance_bps: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BinaryMargin {
+    pub initial_atoms: u128,
+    pub maintenance_atoms: u128,
+    pub terminal_loss_atoms: u128,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FundingPolicy {
+    pub coefficient_bps: u32,
+    pub premium_cap_e6: u64,
+    pub rate_cap_e6: u64,
+    pub boundary_start_e6: u64,
+    pub boundary_min_cap_e6: u64,
+}
+
+pub fn lifecycle_for_time(policy: &LifecyclePolicy, now: i64) -> Option<MarketLifecycle> {
+    if policy.restricted_at <= 0
+        || policy.restricted_at >= policy.reduce_only_at
+        || policy.reduce_only_at >= policy.hard_flat_at
+    {
+        return None;
+    }
+    Some(if now >= policy.hard_flat_at {
+        MarketLifecycle::Locked
+    } else if now >= policy.reduce_only_at {
+        MarketLifecycle::ReduceOnly
+    } else if now >= policy.restricted_at {
+        MarketLifecycle::Restricted
+    } else {
+        MarketLifecycle::Active
+    })
+}
+
+pub fn transition_is_monotonic(current: MarketLifecycle, next: MarketLifecycle) -> bool {
+    next >= current && current != MarketLifecycle::Resolved
+}
+
+pub fn is_reduce_only_delta(current: i128, delta: i128) -> bool {
+    current
+        .checked_add(delta)
+        .map(|next| next.unsigned_abs() <= current.unsigned_abs())
+        .unwrap_or(false)
+}
+
+/// Binary margin in settlement atoms. Quantity and price use e6 fixed-point scales.
+/// Every division rounds toward greater collateralization.
+pub fn binary_margin_requirement(
+    signed_quantity: i128,
+    mark_e6: u64,
+    policy: &BinaryMarginPolicy,
+) -> Option<BinaryMargin> {
+    if signed_quantity == 0
+        || mark_e6 > PRICE_SCALE_E6
+        || policy.maintenance_bps > BPS_SCALE as u32
+    {
+        return None;
+    }
+    let quantity = signed_quantity.unsigned_abs();
+    let adverse_e6 = if signed_quantity > 0 {
+        mark_e6
+    } else {
+        PRICE_SCALE_E6.checked_sub(mark_e6)?
+    };
+    let terminal = mul_div_ceil(
+        quantity,
+        u128::from(adverse_e6),
+        u128::from(PRICE_SCALE_E6),
+    )?;
+    let buffers_e6 = policy
+        .jump_buffer_e6
+        .checked_add(policy.liquidity_buffer_e6)?
+        .checked_add(policy.oracle_buffer_e6)?
+        .checked_add(policy.liquidation_buffer_e6)?
+        .checked_add(policy.fee_buffer_e6)?
+        .checked_add(policy.safety_buffer_e6)?;
+    let buffers = mul_div_ceil(
+        quantity,
+        u128::from(buffers_e6),
+        u128::from(PRICE_SCALE_E6),
+    )?;
+    let initial = terminal.checked_add(buffers)?;
+    let maintenance = mul_div_ceil(
+        initial,
+        u128::from(policy.maintenance_bps),
+        u128::from(BPS_SCALE),
+    )?;
+    Some(BinaryMargin {
+        initial_atoms: initial,
+        maintenance_atoms: maintenance,
+        terminal_loss_atoms: terminal,
+    })
+}
+
+/// Absolute probability-point premium from meaningful local impact prices.
+pub fn funding_premium_e6(local_bid_e6: u64, local_ask_e6: u64, index_e6: u64) -> Option<i64> {
+    if local_bid_e6 > local_ask_e6 || index_e6 > PRICE_SCALE_E6 {
+        return None;
+    }
+    let rich = local_bid_e6.saturating_sub(index_e6);
+    let cheap = index_e6.saturating_sub(local_ask_e6);
+    i64::try_from(rich).ok()?.checked_sub(i64::try_from(cheap).ok()?)
+}
+
+/// Funding per contract in probability e6. Positive means longs pay shorts.
+pub fn bounded_funding_unit_e6(
+    premium_e6: i64,
+    index_e6: u64,
+    policy: &FundingPolicy,
+) -> Option<i64> {
+    if policy.coefficient_bps > BPS_SCALE as u32
+        || policy.boundary_start_e6 >= PRICE_SCALE_E6 / 2
+        || policy.boundary_min_cap_e6 > policy.rate_cap_e6
+        || index_e6 > PRICE_SCALE_E6
+    {
+        return None;
+    }
+    let premium = premium_e6.clamp(
+        -i64::try_from(policy.premium_cap_e6).ok()?,
+        i64::try_from(policy.premium_cap_e6).ok()?,
+    );
+    let raw = i128::from(premium)
+        .checked_mul(i128::from(policy.coefficient_bps))?
+        .checked_div(i128::from(BPS_SCALE))?;
+    let distance = index_e6.min(PRICE_SCALE_E6.checked_sub(index_e6)?);
+    let cap = if distance >= policy.boundary_start_e6 {
+        policy.rate_cap_e6
+    } else if policy.boundary_start_e6 == 0 {
+        policy.boundary_min_cap_e6
+    } else {
+        let range = policy.rate_cap_e6.checked_sub(policy.boundary_min_cap_e6)?;
+        let scaled = mul_div_floor(
+            u128::from(range),
+            u128::from(distance),
+            u128::from(policy.boundary_start_e6),
+        )?;
+        policy
+            .boundary_min_cap_e6
+            .checked_add(u64::try_from(scaled).ok()?)?
+    };
+    i64::try_from(raw.clamp(-i128::from(cap), i128::from(cap))).ok()
+}
+
 pub fn valid_live_price(price_e6: u64, epsilon_e6: u64) -> bool {
     epsilon_e6 > 0
         && epsilon_e6 < PRICE_SCALE_E6 / 2
@@ -205,5 +391,58 @@ mod tests {
         assert_eq!(mul_div_floor(10, 1, 3), Some(3));
         assert_eq!(mul_div_ceil(10, 1, 3), Some(4));
         assert_eq!(midpoint_floor(1, 2), Some(1));
+    }
+
+    #[test]
+    fn binary_margin_is_directional_and_conservative() {
+        let p = BinaryMarginPolicy {
+            jump_buffer_e6: 20_000,
+            liquidity_buffer_e6: 10_000,
+            oracle_buffer_e6: 5_000,
+            liquidation_buffer_e6: 5_000,
+            fee_buffer_e6: 1_000,
+            safety_buffer_e6: 9_000,
+            maintenance_bps: 8_000,
+        };
+        let long = binary_margin_requirement(1_000_000, 800_000, &p).unwrap();
+        let short = binary_margin_requirement(-1_000_000, 800_000, &p).unwrap();
+        assert_eq!(long.terminal_loss_atoms, 800_000);
+        assert_eq!(short.terminal_loss_atoms, 200_000);
+        assert_eq!(long.initial_atoms, 850_000);
+        assert_eq!(short.initial_atoms, 250_000);
+        assert_eq!(long.maintenance_atoms, 680_000);
+    }
+
+    #[test]
+    fn lifecycle_is_ordered_and_reduce_only_is_exact() {
+        let p = LifecyclePolicy {
+            restricted_at: 100,
+            reduce_only_at: 200,
+            hard_flat_at: 300,
+        };
+        assert_eq!(lifecycle_for_time(&p, 99), Some(MarketLifecycle::Active));
+        assert_eq!(lifecycle_for_time(&p, 100), Some(MarketLifecycle::Restricted));
+        assert_eq!(lifecycle_for_time(&p, 200), Some(MarketLifecycle::ReduceOnly));
+        assert_eq!(lifecycle_for_time(&p, 300), Some(MarketLifecycle::Locked));
+        assert!(is_reduce_only_delta(100, -40));
+        assert!(!is_reduce_only_delta(100, 1));
+        assert!(!is_reduce_only_delta(0, 1));
+        assert!(transition_is_monotonic(MarketLifecycle::Active, MarketLifecycle::Locked));
+        assert!(!transition_is_monotonic(MarketLifecycle::Locked, MarketLifecycle::Active));
+    }
+
+    #[test]
+    fn funding_uses_absolute_points_and_compresses_at_boundaries() {
+        let p = FundingPolicy {
+            coefficient_bps: 1_000,
+            premium_cap_e6: 50_000,
+            rate_cap_e6: 5_000,
+            boundary_start_e6: 150_000,
+            boundary_min_cap_e6: 500,
+        };
+        assert_eq!(funding_premium_e6(708_000, 716_000, 700_000), Some(8_000));
+        assert_eq!(bounded_funding_unit_e6(8_000, 700_000, &p), Some(800));
+        assert_eq!(bounded_funding_unit_e6(50_000, 10_000, &p), Some(800));
+        assert_eq!(bounded_funding_unit_e6(-8_000, 700_000, &p), Some(-800));
     }
 }

@@ -1,0 +1,1 @@
+import{AppShell}from"@/components/app-shell";export default function Loading(){return <AppShell><div className="page-container markets-page" aria-busy="true"><div className="page-title"><div><p className="eyebrow">DISCOVER</p><h1>Markets</h1><p>Loading indexed markets…</p></div></div><div className="market-table-wrap api-skeleton"><i/><i/><i/></div></div></AppShell>}

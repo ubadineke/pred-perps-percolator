@@ -13,5 +13,6 @@ deployments/*.local.json
 deployments/*.keypair.json
 deployments/jupiter-live-market.json
 .local-ledger/
+.data/
 test-ledger/
 vendor/*/target/

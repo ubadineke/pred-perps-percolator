@@ -26,6 +26,7 @@
     "maxTradingFeeBps": 10000,
     "tradeFeeBaseBps": 30,
     "liquidationFeeBps": 0,
-    "maxPriceMoveBpsPerSlot": 10000
+    "maxPriceMoveBpsPerSlot": 10000,
+    "maxAbsFundingE9PerSlot": 10000
   }
 }

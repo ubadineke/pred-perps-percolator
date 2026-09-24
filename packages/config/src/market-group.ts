@@ -12,6 +12,7 @@ export type PercolatorMarketGroupConfig = {
     tradeFeeBaseBps: number;
     liquidationFeeBps: number;
     maxPriceMoveBpsPerSlot: number;
+    maxAbsFundingE9PerSlot: number;
   };
 };
 
@@ -35,6 +36,7 @@ export function validateMarketGroupConfig(value: unknown): asserts value is Perc
   integerIn(config.risk?.tradeFeeBaseBps, 0, config.risk!.maxTradingFeeBps, "risk.tradeFeeBaseBps");
   integerIn(config.risk?.liquidationFeeBps, 0, 10_000, "risk.liquidationFeeBps");
   integerIn(config.risk?.maxPriceMoveBpsPerSlot, 1, 10_000, "risk.maxPriceMoveBpsPerSlot");
+  integerIn(config.risk?.maxAbsFundingE9PerSlot, 0, 10_000, "risk.maxAbsFundingE9PerSlot");
 }
 
 export function toPercolatorInitMarket(config: PercolatorMarketGroupConfig) {
@@ -55,7 +57,7 @@ export function toPercolatorInitMarket(config: PercolatorMarketGroupConfig) {
     min_liquidation_abs: 0n,
     max_price_move_bps_per_slot: config.risk.maxPriceMoveBpsPerSlot,
     max_accrual_dt_slots: 1,
-    max_abs_funding_e9_per_slot: 0,
+    max_abs_funding_e9_per_slot: config.risk.maxAbsFundingE9PerSlot,
     min_funding_lifetime_slots: 1,
     max_account_b_settlement_chunks: 1,
     max_bankrupt_close_chunks: 1,
