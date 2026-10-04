@@ -160,6 +160,8 @@ Useful endpoints:
 - `GET /v1/markets/:recordAddress`
 - `GET /v1/markets/:recordAddress/trades`
 - `GET /v1/markets/:recordAddress/funding`
+- `GET /v1/markets/:recordAddress/prices`
+- `GET /v1/owners/:ownerHex/portfolio`
 - `GET /v1/portfolios/:portfolioAddress`
 - `GET /v1/portfolios/:portfolioAddress/positions`
 - `GET /v1/portfolios/:portfolioAddress/transactions`
@@ -168,6 +170,40 @@ Useful endpoints:
 - `GET /v1/status/keeper`
 
 The restart snapshot is stored at `.data/moxie-index.json` and is ignored by Git.
+
+For a live Panta-backed devnet market, open another terminal and run the authenticated reporter:
+
+```bash
+pnpm oracle:start
+```
+
+It polls the Panta reference price, derives local impact quotes from the Moxie matcher, and
+publishes an identity-bound pricing observation every ten seconds. The reporter keypair must be
+the reporter stored in the oracle configuration. Change the interval with
+`ORACLE_REPORT_INTERVAL_MS`; do not run two reporters for the same market because observation
+sequences are strictly ordered.
+
+### Verify the three price layers
+
+Moxie deliberately keeps execution and risk pricing separate:
+
+- **Execution price** is the authenticated matcher fill emitted as `moxie_fill`; the trade API
+  exposes it as `data.executionPriceE6` together with `data.executedSizeQ`.
+- **Local market price** is the midpoint of the matcher's current inventory-skewed bid and ask.
+  Price history exposes it as `localMidE6`.
+- **Protected mark** is the median of local last, local midpoint, and the Panta index plus the
+  rolling 30-minute local/index basis. Percolator uses this value for risk, not for forcing fills.
+
+Inspect all three after submitting trades from the terminal:
+
+```bash
+curl http://127.0.0.1:8787/v1/markets/<record-address>/trades
+curl http://127.0.0.1:8787/v1/markets/<record-address>/prices
+```
+
+The terminal chart plots protected mark, local midpoint, and Panta index separately; its trade
+tape displays actual matcher execution prices. One isolated fill may move `localLastE6` without
+moving the protected mark because the median filter requires corroboration from another input.
 
 ## 7. Start the frontend
 
@@ -213,12 +249,14 @@ You can currently:
 - inspect shared collateral, PnL, active position legs, and certified account health;
 - query transaction-derived trade, funding, crank, liquidation, and resolution events;
 - connect through Privy email/Google onboarding or an installed Solana wallet;
-- use the frontend order ticket as a position preview.
+- create a wallet-owned shared-margin portfolio from the trading terminal;
+- mint and deposit mock USDC through the devnet-only faucet;
+- submit real matcher-routed long and short transactions from the terminal;
+- follow indexed mark/index observations on the chart and inspect transaction-derived fills.
 
-The browser does **not yet submit transactions**. Wallet-owned portfolio discovery, deposits,
-withdrawals, and signed order submission are the next frontend integration stage. The SDK
-builders for those protocol instructions already exist, and the active wallet connector is now
-available for that signing layer.
+The current devnet group enforces 100% initial margin, so the terminal truthfully caps leverage
+at 1×. A higher slider must only be enabled after deploying a market group whose on-chain risk
+envelope supports it. The built-in faucet is disabled outside devnet.
 
 ## 9. Using a live Jupiter market
 
@@ -334,3 +372,61 @@ To import a live Jupiter-selected market during bootstrap instead of the committ
 pnpm deploy:devnet:live
 pnpm verify:devnet
 ```
+
+## 13. Panta market discovery
+
+Panta is integrated as a server-side underlying-market feed. Put the live key in `.env`; never
+expose it through a `NEXT_PUBLIC_` variable:
+
+```env
+PANTA_API_KEY=your_live_key
+PANTA_LIVE_API_BASE_URL=https://live-api.panta.market/api/v1
+```
+
+With the indexer running, verify the provider and browse normalized markets:
+
+```bash
+curl http://127.0.0.1:8787/v1/providers/panta/status
+curl 'http://127.0.0.1:8787/v1/providers/panta/markets?limit=5'
+```
+
+The Markets page displays these as **Panta underlyings**. They are reference probabilities from
+Solana mainnet, not executable Moxie quotes. Generate admission manifests for currently open,
+priced markets with:
+
+```bash
+pnpm fetch:panta 3
+```
+
+This command deliberately fails when there are not enough eligible open markets. A generated
+manifest is still only a candidate: activate it on Moxie devnet after reviewing its immutable
+rules and configuring local liquidity. Panta does not currently provide an executable order book
+through this integration, so the adapter never invents bid/ask depth from the displayed price.
+
+## 14. Market authority console
+
+Open the administrative admission console at:
+
+```text
+http://localhost:3000/admin/markets
+```
+
+The frontend reads these public values from the server environment:
+
+```env
+MOXIE_MARKET_AUTHORITY=authority_wallet_address
+MOXIE_MARKET_ACCOUNT=percolator_market_group
+MOXIE_ORACLE_PROGRAM_ID=moxie_oracle_program
+PERCOLATOR_PROGRAM_ID=percolator_program
+MOXIE_CLUSTER=devnet
+```
+
+Connect the configured authority through the regular Solana wallet option. The current Privy
+bridge provides authentication and an embedded address but does not yet expose the transaction
+signer to this admin component.
+
+The console loads provider candidates, fetches their detailed rules, validates the provider
+lifecycle and lock-clock, requires an explicit local-liquidity attestation, derives the imported
+market PDA, and submits the real `ActivateImportedPerpV2` instruction. Viewing the console is
+public; activating a market is not. The oracle program verifies both required signers against its
+stored configuration, so calling the instruction outside the UI does not bypass authorization.

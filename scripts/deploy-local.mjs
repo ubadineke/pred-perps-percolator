@@ -22,29 +22,32 @@ const rpcUrl = devnet
 const deploymentPath = devnet
   ? "deployments/devnet.local.json"
   : "deployments/localnet.local.json";
+const solanaConfig = execFileSync("solana", ["config", "get"], { encoding: "utf8" });
+const configuredPayerPath = solanaConfig.match(/^Keypair Path:\s+(.+)$/m)?.[1]?.trim();
+const payerPath = process.env.SOLANA_KEYPAIR_PATH?.trim() || configuredPayerPath;
+if (!payerPath) throw new Error("could not resolve a payer keypair path");
+accessSync(payerPath, constants.R_OK);
 
 if (devnet) {
   const genesisHash = execFileSync("solana", ["genesis-hash", "--url", rpcUrl], { encoding: "utf8" }).trim();
-  if (genesisHash !== "EtWTRABZaYq6iMfeYKouRu166VU2xqa1") {
+  if (genesisHash !== "EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG") {
     throw new Error(`refusing devnet deployment: unexpected genesis hash ${genesisHash}`);
   }
-  const balance = execFileSync("solana", ["balance", "--url", rpcUrl], { encoding: "utf8" }).trim();
+  const balance = execFileSync("solana", ["balance", "--url", rpcUrl, "--keypair", payerPath], { encoding: "utf8" }).trim();
   console.log(`devnet payer balance: ${balance}`);
 }
 
 run("solana", ["--url", rpcUrl, "cluster-version"]);
-run("solana", ["program", "deploy", "--url", rpcUrl, "--program-id",
+const deployTransportArgs = devnet ? ["--use-rpc"] : [];
+run("solana", ["program", "deploy", "--url", rpcUrl, "--keypair", payerPath, ...deployTransportArgs, "--program-id",
   "vendor/percolator-prog/target/deploy/percolator_prog-keypair.json",
   "vendor/percolator-prog/target/deploy/percolator_prog.so"]);
-run("solana", ["program", "deploy", "--url", rpcUrl, "--program-id",
+run("solana", ["program", "deploy", "--url", rpcUrl, "--keypair", payerPath, ...deployTransportArgs, "--program-id",
   "programs/moxie-matcher/target/deploy/moxie_matcher-keypair.json",
   "programs/moxie-matcher/target/deploy/moxie_matcher.so"]);
-run("solana", ["program", "deploy", "--url", rpcUrl, "--program-id",
+run("solana", ["program", "deploy", "--url", rpcUrl, "--keypair", payerPath, ...deployTransportArgs, "--program-id",
   "programs/moxie-oracle/target/deploy/moxie_oracle-keypair.json",
   "programs/moxie-oracle/target/deploy/moxie_oracle.so"]);
-const solanaConfig = execFileSync("solana", ["config", "get"], { encoding: "utf8" });
-const payerPath = solanaConfig.match(/^Keypair Path:\s+(.+)$/m)?.[1]?.trim();
-if (!payerPath) throw new Error("could not resolve Keypair Path from `solana config get`");
 const bootstrapArgs = ["run", "--quiet", "--manifest-path", "tools/moxie-bootstrap/Cargo.toml", "--",
   rpcUrl,
   "vendor/percolator-prog/target/deploy/percolator_prog-keypair.json",

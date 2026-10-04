@@ -39,23 +39,28 @@ test("pricing observations bind auditable index, impact, health, and sequence in
     externalImpactAskE6: 570_000n,
     localImpactBidE6: 545_000n,
     localImpactAskE6: 575_000n,
+    localLastE6: 565_000n,
+    basisTwapE6: 4_000n,
     sourceTimestamp: 1_800_000_000n,
     sequence: 2n,
     oracleHealth: 1,
   });
   const view = new DataView(encoded.buffer);
-  assert.equal(encoded.length, 132);
+  assert.equal(encoded.length, 148);
   assert.equal(encoded[0], 4);
   assert.equal(view.getBigUint64(67, true), 7n);
   assert.equal(view.getBigUint64(75, true), 560_000n);
-  assert.equal(view.getBigUint64(123, true), 2n);
-  assert.equal(encoded[131], 1);
+  assert.equal(view.getBigUint64(115, true), 565_000n);
+  assert.equal(view.getBigInt64(123, true), 4_000n);
+  assert.equal(view.getBigUint64(139, true), 2n);
+  assert.equal(encoded[147], 1);
 });
 
 test("pricing observation encoding rejects terminal and crossed live prices", () => {
   const base = {
     indexE6: 560_000n, externalImpactBidE6: 550_000n, externalImpactAskE6: 570_000n,
     localImpactBidE6: 545_000n, localImpactAskE6: 575_000n,
+    localLastE6: 560_000n, basisTwapE6: 0n,
     sourceTimestamp: 1n, sequence: 2n, oracleHealth: 1 as const,
   };
   assert.throws(() => encodePricingObservation(identity, { ...base, indexE6: 1_000_000n }), /probability/);

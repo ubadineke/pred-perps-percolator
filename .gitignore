@@ -6,6 +6,7 @@
 docs/
 node_modules/
 .next/
+.next-dev/
 target/
 coverage/
 dist/

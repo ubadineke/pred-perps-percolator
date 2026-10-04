@@ -12,6 +12,7 @@ type PrivyWalletState = {
   address: string | null;
   login: () => void;
   logout: () => Promise<void>;
+  sendTransaction: ((transaction: Uint8Array) => Promise<string>) | null;
 };
 
 const disabledPrivyState: PrivyWalletState = {
@@ -21,13 +22,17 @@ const disabledPrivyState: PrivyWalletState = {
   address: null,
   login: () => undefined,
   logout: async () => undefined,
+  sendTransaction: null,
 };
+
+const base58=(bytes:Uint8Array)=>{const alphabet="123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";let n=0n;for(const byte of bytes)n=(n<<8n)|BigInt(byte);let out="";while(n){out=alphabet[Number(n%58n)]+out;n/=58n}for(const byte of bytes){if(byte!==0)break;out="1"+out}return out||"1"};
 
 const PrivyWalletContext = createContext<PrivyWalletState>(disabledPrivyState);
 
 function PrivyWalletBridge({ children }: { children: ReactNode }) {
   const { ready, authenticated, login, logout } = usePrivy();
   const { wallets } = usePrivySolanaWallets();
+  const wallet=wallets[0];
 
   return (
     <PrivyWalletContext.Provider
@@ -35,9 +40,10 @@ function PrivyWalletBridge({ children }: { children: ReactNode }) {
         enabled: true,
         ready,
         authenticated,
-        address: wallets[0]?.address ?? null,
+        address: wallet?.address ?? null,
         login: () => login({ loginMethods: ["email", "google"] }),
         logout,
+        sendTransaction:wallet?async transaction=>base58((await wallet.signAndSendTransaction({transaction,chain:"solana:devnet" as any})).signature):null,
       }}
     >
       {children}

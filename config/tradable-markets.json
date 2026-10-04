@@ -1,0 +1,23 @@
+[
+  {
+    "provider": "jupiter",
+    "providerMarketId": "POLY-5041239-0",
+    "title": "Chengdu Open: Hubert Hurkacz vs Denis Shapovalov — Hubert Hurkacz"
+  },
+  {
+    "provider": "jupiter",
+    "providerMarketId": "POLY-5055799-0",
+    "title": "Adana: Elena Ruxandra Bertea vs Lucrezia Stefanini — Elena Ruxandra Bertea"
+  },
+  {
+    "provider": "jupiter",
+    "providerMarketId": "POLY-5025003-0",
+    "title": "Bari: Matteo Sciahbasi vs Juan Martin — Matteo Sciahbasi"
+  },
+  {
+    "provider": "panta",
+    "providerMarketId": "5cyMGUVDcToJ8ws5V1sKkGnzthLrLTsqEjo3Pa2HNU8v",
+    "title": "France will concede in the first 25 minutes against Belgium on the 05 October.",
+    "rules": "France concedes a goal by the 25th minute.\n\nSources: https://www.fifa.com, https://www.uefa.com"
+  }
+]

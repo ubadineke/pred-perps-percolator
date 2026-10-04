@@ -17,6 +17,8 @@
     "deploy:local": "node scripts/deploy-local.mjs",
     "verify:local": "node scripts/verify-local.mjs",
     "smoke:jupiter": "node --env-file=.env --experimental-strip-types scripts/smoke-jupiter.mjs",
+    "fetch:panta": "node --env-file=.env --experimental-strip-types scripts/fetch-panta-markets.mjs",
+    "panta:bootstrap:devnet": "node --env-file=.env scripts/bootstrap-panta-devnet.mjs",
     "deploy:local:live": "pnpm run smoke:jupiter && node scripts/deploy-local.mjs --live",
     "deploy:devnet": "node --env-file=.env scripts/deploy-local.mjs --devnet",
     "deploy:devnet:live": "pnpm run smoke:jupiter && node --env-file=.env scripts/deploy-local.mjs --devnet --live",
@@ -26,7 +28,8 @@
     "demo:resolution": "node scripts/not-implemented.mjs demo:resolution 'Phase 11: resolution scenario'",
     "proof:export": "node scripts/not-implemented.mjs proof:export 'Phase 15: proof manifest'",
     "verify:upstream": "node scripts/verify-upstream.mjs",
-    "config:market-group": "node scripts/print-market-group.mjs"
-    ,"indexer:start": "node --env-file=.env --experimental-strip-types services/indexer/src/server.ts"
+    "config:market-group": "node scripts/print-market-group.mjs",
+    "indexer:start": "node --env-file=.env --experimental-strip-types services/indexer/src/server.ts",
+    "oracle:start": "node --env-file=.env --experimental-strip-types apps/web/scripts/oracle-reporter.ts"
   }
 }

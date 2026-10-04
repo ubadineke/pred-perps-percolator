@@ -1,0 +1,19 @@
+{
+  "fetchedAt": "2026-09-28T13:10:28.469Z",
+  "provider": "jupiter",
+  "underlyingProvider": "polymarket",
+  "providerEventId": "POLY-1092861",
+  "providerMarketId": "POLY-5041239-0",
+  "title": "Chengdu Open: Hubert Hurkacz vs Denis Shapovalov — Hubert Hurkacz",
+  "rules": "This market refers to the tennis match between Hubert Hurkacz and Denis Shapovalov in the Chengdu Open, originally scheduled for September 28, 2026 at 7:00AM ET.\n\nThis market will resolve to 'Hubert Hurkacz' if Hubert Hurkacz advances against Denis Shapovalov.\n\nThis market will resolve to 'Denis Shapovalov' if Denis Shapovalov advances against Hubert Hurkacz.\n\nIf the match is canceled (not played at all), ends in a tie, or a winner has not been determined by October 12, 2026, 11:59 PM ET (14 days after the scheduled start), this market will resolve to 50-50.\n\nIf the match begins but is not completed, and one player advances due to the opponent's retirement, default, or disqualification, this market will resolve to the player who advances.\n\nIf the match ends in a walkover (player withdraws before the start and the other advances automatically), this market will resolve to 50-50.\n\nThe primary resolution source will be official information from the ATP Tour. A consensus of credible reporting may also be used.",
+  "yesAssetId": "93503662886331160121083491593075855391184346458251010312963595220870325469191",
+  "noAssetId": "57039699129148020320878545780320273221830485826159761900688706993955635216739",
+  "closeTimeMs": 1791198000000,
+  "initialMarkE6": 605000,
+  "book": {
+    "yesBidE6": 600000,
+    "yesAskE6": 610000,
+    "noBidE6": 390000,
+    "noAskE6": 400000
+  }
+}

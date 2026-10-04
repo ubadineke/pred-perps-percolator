@@ -11,6 +11,7 @@ const links = [
   ["/markets", "Trade"],
   ["/portfolio", "Portfolio"],
   ["/technology", "Technology"],
+  ["/admin/markets", "Admin"],
 ];
 
 export function SiteHeader({ floating = false }: { floating?: boolean }) {

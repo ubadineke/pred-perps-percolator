@@ -43,6 +43,46 @@ pub struct MarkResult {
     pub basis_ema_e6: i64,
 }
 
+/// Protected prediction-perp mark:
+/// median(last execution, local midpoint, index + signed basis TWAP), followed
+/// by the configured index-deviation and live-probability clamps.
+pub fn compute_protected_mark(
+    policy: &MarkPolicy,
+    index_e6: u64,
+    local_last_e6: u64,
+    local_bid_e6: u64,
+    local_ask_e6: u64,
+    basis_twap_e6: i64,
+    health: OracleHealth,
+) -> Option<MarkResult> {
+    if !valid_live_price(index_e6, policy.epsilon_e6)
+        || !valid_live_price(local_last_e6, policy.epsilon_e6)
+        || !valid_live_price(local_bid_e6, policy.epsilon_e6)
+        || !valid_live_price(local_ask_e6, policy.epsilon_e6)
+        || local_bid_e6 > local_ask_e6
+        || matches!(health, OracleHealth::Stale | OracleHealth::Locked | OracleHealth::Resolved)
+    {
+        return None;
+    }
+    let bounded_basis = i128::from(basis_twap_e6).clamp(
+        -i128::from(policy.max_basis_e6),
+        i128::from(policy.max_basis_e6),
+    );
+    let effective_basis = if health == OracleHealth::Degraded { bounded_basis / 2 } else { bounded_basis };
+    let live_lower = policy.epsilon_e6;
+    let live_upper = PRICE_SCALE_E6.checked_sub(policy.epsilon_e6)?;
+    let anchored = i128::from(index_e6)
+        .checked_add(effective_basis)?
+        .clamp(i128::from(live_lower), i128::from(live_upper));
+    let local_mid = midpoint_floor(local_bid_e6, local_ask_e6)?;
+    let mut values = [i128::from(local_last_e6), i128::from(local_mid), anchored];
+    values.sort_unstable();
+    let lower = index_e6.saturating_sub(policy.max_mark_deviation_e6).max(live_lower);
+    let upper = index_e6.saturating_add(policy.max_mark_deviation_e6).min(live_upper);
+    let mark = values[1].clamp(i128::from(lower), i128::from(upper));
+    Some(MarkResult { mark_e6: u64::try_from(mark).ok()?, basis_ema_e6: i64::try_from(bounded_basis).ok()? })
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum MarketLifecycle {
@@ -343,6 +383,21 @@ mod tests {
         assert_eq!(result.basis_ema_e6, 25_000);
         assert_eq!(result.mark_e6, 610_000);
         assert!(result.mark_e6.abs_diff(600_000) <= 15_000);
+    }
+
+    #[test]
+    fn protected_mark_uses_three_way_median_and_rejects_one_bad_print() {
+        let result = compute_protected_mark(&policy(), 600_000, 900_000, 604_000, 608_000, 2_000, OracleHealth::Healthy).unwrap();
+        assert_eq!(result.mark_e6, 606_000);
+        assert_eq!(result.basis_ema_e6, 2_000);
+    }
+
+    #[test]
+    fn protected_mark_follows_bounded_local_consensus() {
+        let result = compute_protected_mark(&policy(), 600_000, 630_000, 626_000, 630_000, 12_000, OracleHealth::Healthy).unwrap();
+        assert_eq!(result.mark_e6, 615_000);
+        let extreme = compute_protected_mark(&policy(), 600_000, 900_000, 890_000, 910_000, 100_000, OracleHealth::Healthy).unwrap();
+        assert_eq!(extreme.mark_e6, 615_000);
     }
 
     #[test]

@@ -2,9 +2,9 @@
 
 extern crate alloc;
 
-use alloc::{format, vec, vec::Vec};
+use alloc::{vec, vec::Vec};
 use moxie_probability_math::{
-    bounded_funding_unit_e6, compute_mark, funding_premium_e6, lifecycle_for_time,
+    bounded_funding_unit_e6, compute_protected_mark, funding_premium_e6, lifecycle_for_time,
     transition_is_monotonic, valid_live_price, FundingPolicy, LifecyclePolicy, MarkPolicy,
     MarketLifecycle, OracleHealth,
 };
@@ -256,6 +256,8 @@ struct PricingObservationArgs {
     external_impact_ask_e6: u64,
     local_impact_bid_e6: u64,
     local_impact_ask_e6: u64,
+    local_last_e6: u64,
+    basis_twap_e6: i64,
     source_timestamp: i64,
     sequence: u64,
     oracle_health: u8,
@@ -704,6 +706,7 @@ fn submit_pricing_observation(
         args.external_impact_ask_e6,
         args.local_impact_bid_e6,
         args.local_impact_ask_e6,
+        args.local_last_e6,
     ] {
         if !valid_live_price(price, config.mark_policy.epsilon_e6) {
             return Err(MoxieError::InvalidProbability.into());
@@ -740,12 +743,13 @@ fn submit_pricing_observation(
         args.sequence,
         &clock,
     )?;
-    let mark = compute_mark(
+    let mark = compute_protected_mark(
         &config.mark_policy,
         args.index_e6,
+        args.local_last_e6,
         args.local_impact_bid_e6,
         args.local_impact_ask_e6,
-        record.basis_ema_e6,
+        args.basis_twap_e6,
         health,
     )
     .ok_or(MoxieError::InvalidProbability)?;
@@ -792,6 +796,8 @@ fn submit_pricing_observation(
     record.last_external_impact_ask_e6 = args.external_impact_ask_e6;
     record.last_local_impact_bid_e6 = args.local_impact_bid_e6;
     record.last_local_impact_ask_e6 = args.local_impact_ask_e6;
+    // The wire layout remains stable; this field now stores the reporter's
+    // signed rolling basis TWAP rather than the superseded basis EMA.
     record.basis_ema_e6 = mark.basis_ema_e6;
     record.oracle_health = args.oracle_health;
     // Entering Percolator DrainOnly requires the market authority CPI in the
@@ -1029,7 +1035,7 @@ fn default_lifecycle(external_close_time: i64) -> Result<LifecyclePolicy, Progra
 }
 
 fn parse_pricing_observation(data: &[u8]) -> Result<PricingObservationArgs, ProgramError> {
-    if data.len() != 131 {
+    if data.len() != 147 {
         return Err(MoxieError::InvalidInstruction.into());
     }
     Ok(PricingObservationArgs {
@@ -1042,9 +1048,11 @@ fn parse_pricing_observation(data: &[u8]) -> Result<PricingObservationArgs, Prog
         external_impact_ask_e6: read_u64(data, 90)?,
         local_impact_bid_e6: read_u64(data, 98)?,
         local_impact_ask_e6: read_u64(data, 106)?,
-        source_timestamp: read_i64(data, 114)?,
-        sequence: read_u64(data, 122)?,
-        oracle_health: data[130],
+        local_last_e6: read_u64(data, 114)?,
+        basis_twap_e6: read_i64(data, 122)?,
+        source_timestamp: read_i64(data, 130)?,
+        sequence: read_u64(data, 138)?,
+        oracle_health: data[146],
     })
 }
 
@@ -1168,7 +1176,7 @@ mod tests {
 
     #[test]
     fn pricing_observation_layout_is_exact() {
-        let mut bytes = vec![0u8; 131];
+        let mut bytes = vec![0u8; 147];
         bytes[64..66].copy_from_slice(&7u16.to_le_bytes());
         bytes[66..74].copy_from_slice(&42u64.to_le_bytes());
         bytes[74..82].copy_from_slice(&600_000u64.to_le_bytes());
@@ -1176,12 +1184,16 @@ mod tests {
         bytes[90..98].copy_from_slice(&605_000u64.to_le_bytes());
         bytes[98..106].copy_from_slice(&590_000u64.to_le_bytes());
         bytes[106..114].copy_from_slice(&610_000u64.to_le_bytes());
-        bytes[114..122].copy_from_slice(&100i64.to_le_bytes());
-        bytes[122..130].copy_from_slice(&2u64.to_le_bytes());
-        bytes[130] = OracleHealth::Healthy as u8;
+        bytes[114..122].copy_from_slice(&605_000u64.to_le_bytes());
+        bytes[122..130].copy_from_slice(&2_000i64.to_le_bytes());
+        bytes[130..138].copy_from_slice(&100i64.to_le_bytes());
+        bytes[138..146].copy_from_slice(&2u64.to_le_bytes());
+        bytes[146] = OracleHealth::Healthy as u8;
         let parsed = parse_pricing_observation(&bytes).unwrap();
         assert_eq!(parsed.index_e6, 600_000);
         assert_eq!(parsed.local_impact_ask_e6, 610_000);
+        assert_eq!(parsed.local_last_e6, 605_000);
+        assert_eq!(parsed.basis_twap_e6, 2_000);
         assert_eq!(parsed.oracle_health, 1);
     }
 

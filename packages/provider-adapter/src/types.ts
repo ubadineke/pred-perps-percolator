@@ -14,6 +14,7 @@ export type ExternalMarket = {
   provider: ProviderName;
   providerMarketId: string;
   providerEventId?: string;
+  category?: string;
   title: string;
   description: string;
   rules: string;
@@ -30,6 +31,13 @@ export type ExternalMarket = {
   noAskE6?: number;
   volumeUsdE6?: bigint;
   liquidityUsdE6?: bigint;
+  indexPriceE6?: number;
+  providerPhase?: string;
+  marketType?: string;
+  priceSource?: string;
+  valuationStatus?: string;
+  providerProgramId?: string;
+  sourceNetwork?: "solana-mainnet" | "solana-devnet" | "unknown";
   sourceUrl?: string;
   observedAt: number;
   raw: unknown;

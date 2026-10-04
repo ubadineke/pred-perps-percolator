@@ -1,0 +1,22 @@
+{
+  "fetchedAt": "2026-10-03T23:15:28.328Z",
+  "provider": "panta",
+  "underlyingProvider": "panta",
+  "sourceNetwork": "solana-mainnet",
+  "providerProgramId": "6gM5afTQBq5VZCfgpGqcsqzfWd5maLSCKWtGjbEobZMp",
+  "providerEventId": "5cyMGUVDcToJ8ws5V1sKkGnzthLrLTsqEjo3Pa2HNU8v",
+  "providerMarketId": "5cyMGUVDcToJ8ws5V1sKkGnzthLrLTsqEjo3Pa2HNU8v",
+  "title": "France will concede in the first 25 minutes against Belgium on the 05 October.",
+  "rules": "France concedes a goal by the 25th minute.\n\nSources: https://www.fifa.com, https://www.uefa.com",
+  "yesAssetId": "5cyMGUVDcToJ8ws5V1sKkGnzthLrLTsqEjo3Pa2HNU8v:YES",
+  "noAssetId": "5cyMGUVDcToJ8ws5V1sKkGnzthLrLTsqEjo3Pa2HNU8v:NO",
+  "closeTimeMs": 1791227700000,
+  "initialMarkE6": 501445,
+  "sourceUrl": "https://panta.market/market/5cyMGUVDcToJ8ws5V1sKkGnzthLrLTsqEjo3Pa2HNU8v",
+  "admission": {
+    "status": "candidate",
+    "priceKind": "reference-index",
+    "executableBookVerified": false,
+    "note": "Requires Moxie market admission and local liquidity before trading is enabled."
+  }
+}

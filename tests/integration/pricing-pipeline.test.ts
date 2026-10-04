@@ -22,6 +22,7 @@ test("depth-aware reference becomes a bound pricing observation", () => {
     externalImpactBidE6: BigInt(reference.impactBidE6),
     externalImpactAskE6: BigInt(reference.impactAskE6),
     localImpactBidE6: 592_000n, localImpactAskE6: 612_000n,
+    localLastE6: 606_000n, basisTwapE6: 2_000n,
     sourceTimestamp: 1_000n, sequence: 2n,
     oracleHealth: reference.health === "healthy" ? 1 : 2,
   });
@@ -30,5 +31,5 @@ test("depth-aware reference becomes a bound pricing observation", () => {
   assert.equal(view.getBigUint64(75, true), 600_000n);
   assert.equal(view.getBigUint64(83, true), 590_000n);
   assert.equal(view.getBigUint64(91, true), 610_000n);
-  assert.equal(encoded[131], 1);
+  assert.equal(encoded[147], 1);
 });

@@ -94,6 +94,7 @@ export function normalizeJupiterMarket(value: unknown, observedAt = Date.now()):
     provider: "jupiter",
     providerMarketId,
     providerEventId: textValue(market.eventId) || undefined,
+    category: textValue(metadata.category ?? market.category) || undefined,
     title,
     description: textValue(metadata.description ?? market.description),
     rules: [metadata.rulesPrimary ?? market.rulesPrimary, metadata.rulesSecondary ?? market.rulesSecondary]

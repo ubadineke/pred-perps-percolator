@@ -11,6 +11,7 @@ use solana_program::{
     entrypoint::ProgramResult,
     program_error::ProgramError,
     pubkey::Pubkey,
+    msg,
     sysvar::Sysvar,
 };
 #[cfg(not(feature = "no-entrypoint"))]
@@ -288,6 +289,7 @@ fn process_match(program_id: &Pubkey, accounts: &[AccountInfo], data: &[u8]) -> 
         Some(fill) => {
             cfg.inventory_base = fill.next_inventory;
             write_config(&mut bytes, &cfg)?;
+            msg!("moxie_fill asset={} price_e6={} size_q={}", call.asset_index, fill.exec_price_e6, fill.exec_size);
             write_return(&mut bytes, &call, fill.exec_price_e6, fill.exec_size, false)
         }
         None => write_return(&mut bytes, &call, 1, 0, true),

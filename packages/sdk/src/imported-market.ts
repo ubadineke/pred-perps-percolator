@@ -17,6 +17,8 @@ export type PricingObservation = {
   externalImpactAskE6: bigint;
   localImpactBidE6: bigint;
   localImpactAskE6: bigint;
+  localLastE6: bigint;
+  basisTwapE6: bigint;
   sourceTimestamp: bigint;
   sequence: bigint;
   oracleHealth: 1 | 2;
@@ -81,10 +83,12 @@ export function encodePricingObservation(
     observation.externalImpactAskE6,
     observation.localImpactBidE6,
     observation.localImpactAskE6,
+    observation.localLastE6,
   ]) probability(price);
   if (observation.externalImpactBidE6 > observation.externalImpactAskE6) throw new Error("crossed external impact prices");
   if (observation.localImpactBidE6 > observation.localImpactAskE6) throw new Error("crossed local impact prices");
-  const output = new Uint8Array(132);
+  if (observation.basisTwapE6 < -(1n << 63n) || observation.basisTwapE6 >= (1n << 63n)) throw new Error("basis TWAP exceeds i64");
+  const output = new Uint8Array(148);
   const view = new DataView(output.buffer);
   output[0] = 4;
   output.set(hashIdentity(identity.externalMarketId), 1);
@@ -96,9 +100,11 @@ export function encodePricingObservation(
   view.setBigUint64(91, observation.externalImpactAskE6, true);
   view.setBigUint64(99, observation.localImpactBidE6, true);
   view.setBigUint64(107, observation.localImpactAskE6, true);
-  view.setBigInt64(115, observation.sourceTimestamp, true);
-  view.setBigUint64(123, observation.sequence, true);
-  output[131] = observation.oracleHealth;
+  view.setBigUint64(115, observation.localLastE6, true);
+  view.setBigInt64(123, observation.basisTwapE6, true);
+  view.setBigInt64(131, observation.sourceTimestamp, true);
+  view.setBigUint64(139, observation.sequence, true);
+  output[147] = observation.oracleHealth;
   return output;
 }
 

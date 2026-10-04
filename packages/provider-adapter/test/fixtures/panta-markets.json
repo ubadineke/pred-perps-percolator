@@ -1,0 +1,24 @@
+{
+  "items": [
+    {
+      "marketId": "6yEBmxJu2oWdubFVKZshVVUpLLsXd61csSfmf8y4Qtwd",
+      "category": "pop-culture",
+      "title": "",
+      "description": "Will a female housemate win Big Brother Naija Season 11?",
+      "phase": "primary",
+      "marketType": "breaking",
+      "startTime": 1790597700,
+      "endTime": 1791151200,
+      "resolutionTime": 1791151200,
+      "resolved": false,
+      "status": "primary",
+      "volumeUsdc": "232.704615",
+      "yesPrice": "0.516484551",
+      "noPrice": "0.483515449",
+      "volumeUsdcBase": "232704615",
+      "priceSource": "primary_last",
+      "valuationStatus": "complete"
+    }
+  ],
+  "nextCursor": "next-page"
+}
