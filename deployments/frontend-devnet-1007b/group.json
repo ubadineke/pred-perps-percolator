@@ -1,0 +1,11 @@
+{
+  "cluster": "devnet",
+  "marketAccount": "AihBkr17D9hSSyWRLK5cetZC2P5xMVbft112bHjZWgc2",
+  "oracleConfig": "BiwsnVJR8UetyQxouof9wX4JhdHazBSj1hbjXXvvzfS3",
+  "usdcMint": "5yV4TPjnwvAGTmqJdjeM7rFZUVcrxSfPVVK87YNK3NRS",
+  "vaultAuthority": "AVos3eDQ9vdjp1xhZqRGLejzUjvwdDTuNEACST5WyEB6",
+  "collateralVault": "2mPHsqF5zvaBvqsyhG15G2XCtqgYHHEt7Z2mMztnfnAa",
+  "maxAssets": 8,
+  "initializationSignature": "2AxEdxyE7bBQ7wKwCm9JA72tK3sGf1zWcWdqxRKT61AaCnhLy2CChLzbp7yfUDCU1RNKKnBHJEg3DRpUMjTi7igq",
+  "oracleSignature": "3ynNTzWTf56jgKqZzGjssZi9ia3UiWKti8qCGdZu6nWRMPWNj4vtAvLPWRsXd6EuxP1P1vN9LvZmfwUcioADcjZ6"
+}

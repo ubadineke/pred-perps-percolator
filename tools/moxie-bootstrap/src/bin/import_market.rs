@@ -82,15 +82,17 @@ fn main() -> Result<()> {
     let market_data = client.get_account(&market_account)?.data;
     let (_, group) = state::read_market(&market_data)?;
     let market_id = group.next_market_id;
-    let asset_index = u16::try_from(market_id.checked_sub(1).context("invalid market frontier")?)?;
+    let asset_index = u16::try_from(
+        market_id
+            .checked_sub(1)
+            .context("invalid market frontier")?,
+    )?;
     if usize::from(asset_index) >= group.assets.len() {
         bail!("market account has no remaining asset capacity");
     }
 
-    let (oracle_config, _) = Pubkey::find_program_address(
-        &[b"config", market_account.as_ref()],
-        &oracle_program,
-    );
+    let (oracle_config, _) =
+        Pubkey::find_program_address(&[b"config", market_account.as_ref()], &oracle_program);
     let external_hash = hash(manifest.provider_market_id.as_bytes()).to_bytes();
     let (record, _) = Pubkey::find_program_address(
         &[b"imported", oracle_config.as_ref(), &external_hash],
@@ -159,6 +161,8 @@ fn main() -> Result<()> {
     observation.extend_from_slice(&mark.saturating_add(5_000).min(999_000).to_le_bytes());
     observation.extend_from_slice(&mark.saturating_sub(4_000).max(1_000).to_le_bytes());
     observation.extend_from_slice(&mark.saturating_add(4_000).min(999_000).to_le_bytes());
+    observation.extend_from_slice(&mark.to_le_bytes());
+    observation.extend_from_slice(&0i64.to_le_bytes());
     observation.extend_from_slice(&source_timestamp.to_le_bytes());
     observation.extend_from_slice(&2u64.to_le_bytes());
     observation.push(1);
@@ -182,7 +186,7 @@ fn main() -> Result<()> {
             },
         ],
     )
-    .context("submit initial Jupiter pricing observation")?;
+    .context("submit initial prediction-market pricing observation")?;
 
     let receipt = ImportReceipt {
         cluster: "devnet",
@@ -198,8 +202,14 @@ fn main() -> Result<()> {
         activation_signature: activation_signature.to_string(),
         observation_signature: observation_signature.to_string(),
     };
-    fs::write(&args[7], format!("{}\n", serde_json::to_string_pretty(&receipt)?))?;
-    println!("imported {} as asset {} / market {}", receipt.provider_market_id, asset_index, market_id);
+    fs::write(
+        &args[7],
+        format!("{}\n", serde_json::to_string_pretty(&receipt)?),
+    )?;
+    println!(
+        "imported {} as asset {} / market {}",
+        receipt.provider_market_id, asset_index, market_id
+    );
     println!("record {}", record);
     Ok(())
 }

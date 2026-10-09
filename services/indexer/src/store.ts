@@ -2,7 +2,7 @@ export type MarketProjection={address:string;provider:string;providerMarketId:st
 export type PortfolioProjection={address:string;owner:string;slot:number;capital:string;pnl:string;portfolioId:string;positionEpoch:string;sequence:string;health:HealthProjection;positions:readonly PositionProjection[]};
 export type HealthProjection={valid:boolean;equity:string;initialRequirement:string;maintenanceRequirement:string;liquidationDeficit:string;worstCaseLoss:string};
 export type PositionProjection={slot:number;assetIndex:number;marketId:string;side:"long"|"short";sizeQ:string;entryNotional:string;stale:boolean};
-export type EventProjection={signature:string;instructionIndex:number;slot:number;kind:"trade"|"funding"|"deposit"|"withdrawal"|"crank"|"liquidation"|"resolution";marketId?:string;portfolio?:string;data:Record<string,string>};
+export type EventProjection={signature:string;instructionIndex:number;slot:number;kind:"trade"|"funding"|"deposit"|"withdrawal"|"crank"|"liquidation"|"resolution";marketId?:string;portfolio?:string;blockTime?:number;data:Record<string,string>};
 export type ServiceHealth={oracleLastSlot:number;keeperLastSlot:number;indexedSlot:number};
 export type PricePoint={slot:number;observedAt:string;markE6:string;indexE6:string;localMidE6:string;basisTwapE6:string};
 

@@ -48,7 +48,7 @@ run("solana", ["program", "deploy", "--url", rpcUrl, "--keypair", payerPath, ...
 run("solana", ["program", "deploy", "--url", rpcUrl, "--keypair", payerPath, ...deployTransportArgs, "--program-id",
   "programs/moxie-oracle/target/deploy/moxie_oracle-keypair.json",
   "programs/moxie-oracle/target/deploy/moxie_oracle.so"]);
-const bootstrapArgs = ["run", "--quiet", "--manifest-path", "tools/moxie-bootstrap/Cargo.toml", "--",
+const bootstrapArgs = ["run", "--quiet", "--manifest-path", "tools/moxie-bootstrap/Cargo.toml", "--bin", "moxie-bootstrap", "--",
   rpcUrl,
   "vendor/percolator-prog/target/deploy/percolator_prog-keypair.json",
   "programs/moxie-matcher/target/deploy/moxie_matcher-keypair.json",

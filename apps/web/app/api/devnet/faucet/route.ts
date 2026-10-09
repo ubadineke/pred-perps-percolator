@@ -6,12 +6,14 @@ export const runtime="nodejs";
 export const dynamic="force-dynamic";
 const TOKEN_PROGRAM=new PublicKey("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"),ATA_PROGRAM=new PublicKey("ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL");
 const recent=new Map<string,number>();
+// Mock devnet USDC only (the route refuses non-devnet clusters): up to 10,000 per request.
+const MAX_FAUCET_E6=10_000_000_000;
 const u64=(value:bigint)=>{const data=Buffer.alloc(8);data.writeBigUInt64LE(value);return data};
 
 export async function POST(request:Request){
   try{
     if((process.env.MOXIE_CLUSTER??"devnet")!=="devnet")return Response.json({error:"The faucet is only enabled on devnet."},{status:403});
-    const body=await request.json() as {address?:string;amountE6?:number},owner=new PublicKey(body.address??""),amount=BigInt(Math.min(Math.max(Math.trunc(body.amountE6??0),1),100_000_000));
+    const body=await request.json() as {address?:string;amountE6?:number},owner=new PublicKey(body.address??""),amount=BigInt(Math.min(Math.max(Math.trunc(body.amountE6??0),1),MAX_FAUCET_E6));
     const last=recent.get(owner.toBase58())??0;if(Date.now()-last<10_000)return Response.json({error:"Wait ten seconds before requesting more devnet collateral."},{status:429});
     const path=process.env.SOLANA_KEYPAIR_PATH??`${homedir()}/.config/solana/id.json`,secret=JSON.parse(await readFile(path,"utf8")) as number[],payer=Keypair.fromSecretKey(Uint8Array.from(secret));
     const mint=new PublicKey(process.env.MOXIE_USDC_MINT??""),connection=new Connection(process.env.NEXT_PUBLIC_SOLANA_RPC_URL??process.env.SOLANA_RPC_URL??"https://api.devnet.solana.com","confirmed"),[ata]=PublicKey.findProgramAddressSync([owner.toBytes(),TOKEN_PROGRAM.toBytes(),mint.toBytes()],ATA_PROGRAM),tx=new Transaction();

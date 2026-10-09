@@ -1,0 +1,22 @@
+{
+  "fetchedAt": "2026-10-07T14:09:18.820Z",
+  "provider": "panta",
+  "underlyingProvider": "panta",
+  "sourceNetwork": "solana-mainnet",
+  "providerProgramId": "6gM5afTQBq5VZCfgpGqcsqzfWd5maLSCKWtGjbEobZMp",
+  "providerEventId": "C86nbpSX4ntRWvN4HMrdnhzHjHTtLooNtnw6k7hnmx1F",
+  "providerMarketId": "C86nbpSX4ntRWvN4HMrdnhzHjHTtLooNtnw6k7hnmx1F",
+  "title": "Saka 7+ points, GW6",
+  "rules": "Resolves YES if the official Fantasy Premier League site credits Bukayo Saka with 7 or more points for Gameweek 6, once every match in that gameweek is marked finished and bonus points are final. Resolves NO otherwise.\n\nSources: https://fantasy.premierleague.com/api/bootstrap-static/, https://fantasy.premierleague.com/api/event/6/live/",
+  "yesAssetId": "C86nbpSX4ntRWvN4HMrdnhzHjHTtLooNtnw6k7hnmx1F:YES",
+  "noAssetId": "C86nbpSX4ntRWvN4HMrdnhzHjHTtLooNtnw6k7hnmx1F:NO",
+  "closeTimeMs": 1791639000000,
+  "initialMarkE6": 500167,
+  "sourceUrl": "https://panta.market/market/C86nbpSX4ntRWvN4HMrdnhzHjHTtLooNtnw6k7hnmx1F",
+  "admission": {
+    "status": "candidate",
+    "priceKind": "reference-index",
+    "executableBookVerified": false,
+    "note": "Requires Moxie market admission and local liquidity before trading is enabled."
+  }
+}

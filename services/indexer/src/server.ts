@@ -25,6 +25,9 @@ const source = new SolanaRpcSource(
   process.env.SOLANA_RPC_URL ?? "http://127.0.0.1:8899",
   required("MOXIE_ORACLE_PROGRAM_ID"),
   required("PERCOLATOR_PROGRAM_ID"),
+  // List only events from the market group the web terminal trades against.
+  process.env.MOXIE_MARKET_ACCOUNT,
+  [process.env.MOXIE_MATCHER_CONTEXT],
 );
 const indexer = new MoxieIndexer(source, undefined, metadata);
 const snapshot = process.env.INDEXER_SNAPSHOT ?? ".data/moxie-index.json";

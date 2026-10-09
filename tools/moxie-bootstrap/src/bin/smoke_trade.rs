@@ -47,7 +47,12 @@ struct SmokeReceipt {
     lp_final_position_q: i128,
 }
 
-fn send(client: &RpcClient, payer: &Keypair, ixs: &[Instruction], extra: &[&Keypair]) -> Result<Signature> {
+fn send(
+    client: &RpcClient,
+    payer: &Keypair,
+    ixs: &[Instruction],
+    extra: &[&Keypair],
+) -> Result<Signature> {
     let mut signers = vec![payer];
     signers.extend_from_slice(extra);
     let tx = Transaction::new_signed_with_payer(
@@ -74,7 +79,9 @@ fn position(client: &RpcClient, address: &Pubkey, asset_index: usize) -> Result<
     let data = client.get_account(address)?.data;
     let portfolio = state::read_portfolio(&data)?;
     for wire in &portfolio.legs {
-        let leg = wire.try_to_runtime().map_err(|error| anyhow::anyhow!("invalid leg: {error:?}"))?;
+        let leg = wire
+            .try_to_runtime()
+            .map_err(|error| anyhow::anyhow!("invalid leg: {error:?}"))?;
         if leg.active && leg.asset_index as usize == asset_index {
             return Ok(leg.basis_pos_q);
         }
@@ -94,7 +101,13 @@ struct TradeAccounts {
     market_id: u64,
 }
 
-fn trade(client: &RpcClient, payer: &Keypair, a: &TradeAccounts, size_q: i128, limit_price: u64) -> Result<Signature> {
+fn trade(
+    client: &RpcClient,
+    payer: &Keypair,
+    a: &TradeAccounts,
+    size_q: i128,
+    limit_price: u64,
+) -> Result<Signature> {
     let (trader_id, trader_epoch, _) = snapshot(client, &a.trader_portfolio)?;
     let (lp_id, lp_epoch, lp_sequence) = snapshot(client, &a.lp_portfolio)?;
     send(
@@ -185,13 +198,24 @@ fn main() -> Result<()> {
     )
     .context("create disposable trader portfolio")?;
 
-    let source = get_associated_token_address_with_program_id(&payer.pubkey(), &mint, &spl_token::id());
+    let source =
+        get_associated_token_address_with_program_id(&payer.pubkey(), &mint, &spl_token::id());
     let mut funding = Vec::new();
     if client.get_account(&source).is_err() {
-        funding.push(create_associated_token_account(&payer.pubkey(), &payer.pubkey(), &mint, &spl_token::id()));
+        funding.push(create_associated_token_account(
+            &payer.pubkey(),
+            &payer.pubkey(),
+            &mint,
+            &spl_token::id(),
+        ));
     }
     funding.push(spl_token::instruction::mint_to(
-        &spl_token::id(), &mint, &source, &payer.pubkey(), &[], TRADER_DEPOSIT_E6,
+        &spl_token::id(),
+        &mint,
+        &source,
+        &payer.pubkey(),
+        &[],
+        TRADER_DEPOSIT_E6,
     )?);
     send(&client, &payer, &funding, &[]).context("mint disposable devnet trader collateral")?;
     let (trader_id, _, trader_sequence) = snapshot(&client, &trader_portfolio.pubkey())?;
@@ -251,37 +275,58 @@ fn main() -> Result<()> {
     }
 
     let accounts = TradeAccounts {
-        percolator, matcher, market,
+        percolator,
+        matcher,
+        market,
         trader_portfolio: trader_portfolio.pubkey(),
-        lp_portfolio, matcher_context, matcher_delegate,
-        asset_index, market_id,
+        lp_portfolio,
+        matcher_context,
+        matcher_delegate,
+        asset_index,
+        market_id,
     };
     let buy_limit = mark.saturating_add(100_000).min(999_999);
     let sell_limit = mark.saturating_sub(100_000).max(1);
-    let long_open_signature = trade(&client, &payer, &accounts, TEST_SIZE_Q, buy_limit)
-        .context("open long")?;
-    let long_close_signature = trade(&client, &payer, &accounts, -TEST_SIZE_Q, sell_limit)
-        .context("close long")?;
-    let short_open_signature = trade(&client, &payer, &accounts, -TEST_SIZE_Q, sell_limit)
-        .context("open short")?;
-    let short_close_signature = trade(&client, &payer, &accounts, TEST_SIZE_Q, buy_limit)
-        .context("close short")?;
+    let long_open_signature =
+        trade(&client, &payer, &accounts, TEST_SIZE_Q, buy_limit).context("open long")?;
+    let long_close_signature =
+        trade(&client, &payer, &accounts, -TEST_SIZE_Q, sell_limit).context("close long")?;
+    let short_open_signature =
+        trade(&client, &payer, &accounts, -TEST_SIZE_Q, sell_limit).context("open short")?;
+    let short_close_signature =
+        trade(&client, &payer, &accounts, TEST_SIZE_Q, buy_limit).context("close short")?;
 
-    let trader_final_position_q = position(&client, &trader_portfolio.pubkey(), usize::from(asset_index))?;
+    let trader_final_position_q = position(
+        &client,
+        &trader_portfolio.pubkey(),
+        usize::from(asset_index),
+    )?;
     let lp_final_position_q = position(&client, &lp_portfolio, usize::from(asset_index))?;
     if trader_final_position_q != 0 || lp_final_position_q != 0 {
         bail!("round trip did not flatten: trader={trader_final_position_q}, lp={lp_final_position_q}");
     }
 
     let receipt = SmokeReceipt {
-        cluster: "devnet", market_account: market.to_string(), trader: payer.pubkey().to_string(),
-        trader_portfolio: trader_portfolio.pubkey().to_string(), lp_portfolio: lp_portfolio.to_string(),
-        asset_index, market_id, size_q: TEST_SIZE_Q, deposit_signature: deposit_signature.to_string(),
-        long_open_signature: long_open_signature.to_string(), long_close_signature: long_close_signature.to_string(),
-        short_open_signature: short_open_signature.to_string(), short_close_signature: short_close_signature.to_string(),
-        trader_final_position_q, lp_final_position_q,
+        cluster: "devnet",
+        market_account: market.to_string(),
+        trader: payer.pubkey().to_string(),
+        trader_portfolio: trader_portfolio.pubkey().to_string(),
+        lp_portfolio: lp_portfolio.to_string(),
+        asset_index,
+        market_id,
+        size_q: TEST_SIZE_Q,
+        deposit_signature: deposit_signature.to_string(),
+        long_open_signature: long_open_signature.to_string(),
+        long_close_signature: long_close_signature.to_string(),
+        short_open_signature: short_open_signature.to_string(),
+        short_close_signature: short_close_signature.to_string(),
+        trader_final_position_q,
+        lp_final_position_q,
     };
-    fs::write(&args[12], format!("{}\n", serde_json::to_string_pretty(&receipt)?))?;
+    fs::write(
+        &args[12],
+        format!("{}\n", serde_json::to_string_pretty(&receipt)?),
+    )?;
     println!("long and short round trips succeeded; trader and LP are flat");
     println!("trader portfolio {}", receipt.trader_portfolio);
     Ok(())

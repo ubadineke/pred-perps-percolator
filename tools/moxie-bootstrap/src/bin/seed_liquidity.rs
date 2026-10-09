@@ -16,7 +16,15 @@ use spl_associated_token_account::{
 };
 use std::{env, fs};
 
-const LP_DEPOSIT_E6: u64 = 1_000_000_000; // 1,000 devnet USDC
+const DEFAULT_LP_DEPOSIT_E6: u64 = 1_000_000_000; // 1,000 devnet USDC
+const DEFAULT_MAX_FILL_Q: u128 = 10_000_000; // 10 contracts per fill
+const DEFAULT_MAX_INVENTORY_Q: u128 = 100_000_000; // 100 contracts net
+
+/// Optional sizing overrides: MOXIE_LP_DEPOSIT_E6, MOXIE_MATCHER_MAX_FILL_Q,
+/// MOXIE_MATCHER_MAX_INVENTORY_Q (contracts are 1_000_000 q each).
+fn env_or<T: std::str::FromStr>(name: &str, default: T) -> T {
+    std::env::var(name).ok().and_then(|v| v.parse().ok()).unwrap_or(default)
+}
 const MATCHER_CONTEXT_LEN: usize = 320;
 
 #[derive(Serialize)]
@@ -37,7 +45,12 @@ struct Receipt {
     binding_signature: String,
 }
 
-fn send(client: &RpcClient, payer: &Keypair, ixs: &[Instruction], extra: &[&Keypair]) -> Result<Signature> {
+fn send(
+    client: &RpcClient,
+    payer: &Keypair,
+    ixs: &[Instruction],
+    extra: &[&Keypair],
+) -> Result<Signature> {
     let mut signers = vec![payer];
     signers.extend_from_slice(extra);
     let tx = Transaction::new_signed_with_payer(
@@ -61,8 +74,8 @@ fn matcher_init_data(expiry_slot: u64, close_time: i64) -> Vec<u8> {
     }
     data.extend_from_slice(&expiry_slot.to_le_bytes());
     data.extend_from_slice(&1_000_000_000u128.to_le_bytes());
-    data.extend_from_slice(&10_000_000u128.to_le_bytes());
-    data.extend_from_slice(&100_000_000u128.to_le_bytes());
+    data.extend_from_slice(&env_or("MOXIE_MATCHER_MAX_FILL_Q", DEFAULT_MAX_FILL_Q).to_le_bytes());
+    data.extend_from_slice(&env_or("MOXIE_MATCHER_MAX_INVENTORY_Q", DEFAULT_MAX_INVENTORY_Q).to_le_bytes());
     data.extend_from_slice(&1_000u32.to_le_bytes());
     data.extend_from_slice(&restricted_at.to_le_bytes());
     data.extend_from_slice(&reduce_only_at.to_le_bytes());
@@ -121,10 +134,16 @@ fn main() -> Result<()> {
     )
     .context("create the operator-owned LP portfolio")?;
 
-    let source = get_associated_token_address_with_program_id(&payer.pubkey(), &mint, &spl_token::id());
+    let source =
+        get_associated_token_address_with_program_id(&payer.pubkey(), &mint, &spl_token::id());
     let mut fund = Vec::new();
     if client.get_account(&source).is_err() {
-        fund.push(create_associated_token_account(&payer.pubkey(), &payer.pubkey(), &mint, &spl_token::id()));
+        fund.push(create_associated_token_account(
+            &payer.pubkey(),
+            &payer.pubkey(),
+            &mint,
+            &spl_token::id(),
+        ));
     }
     fund.push(spl_token::instruction::mint_to(
         &spl_token::id(),
@@ -132,7 +151,7 @@ fn main() -> Result<()> {
         &source,
         &payer.pubkey(),
         &[],
-        LP_DEPOSIT_E6,
+        env_or("MOXIE_LP_DEPOSIT_E6", DEFAULT_LP_DEPOSIT_E6),
     )?);
     send(&client, &payer, &fund, &[]).context("mint devnet collateral for the Moxie LP")?;
 
@@ -158,7 +177,7 @@ fn main() -> Result<()> {
                 data: PercolatorInstruction::Deposit {
                     portfolio_id,
                     expected_sequence: sequence,
-                    amount: u128::from(LP_DEPOSIT_E6),
+                    amount: u128::from(env_or("MOXIE_LP_DEPOSIT_E6", DEFAULT_LP_DEPOSIT_E6)),
                 }
                 .encode(),
             },
@@ -248,15 +267,21 @@ fn main() -> Result<()> {
         matcher_context: context.pubkey().to_string(),
         matcher_delegate: delegate.to_string(),
         collateral_mint: mint.to_string(),
-        collateral_deposited_e6: LP_DEPOSIT_E6,
+        collateral_deposited_e6: env_or("MOXIE_LP_DEPOSIT_E6", DEFAULT_LP_DEPOSIT_E6),
         matcher_expiry_slot: expiry_slot,
         portfolio_signature: portfolio_signature.to_string(),
         deposit_signature: deposit_signature.to_string(),
         matcher_signature: matcher_signature.to_string(),
         binding_signature: binding_signature.to_string(),
     };
-    fs::write(&args[9], format!("{}\n", serde_json::to_string_pretty(&receipt)?))?;
-    println!("seeded LP portfolio {} with {} E6 collateral", receipt.lp_portfolio, LP_DEPOSIT_E6);
+    fs::write(
+        &args[9],
+        format!("{}\n", serde_json::to_string_pretty(&receipt)?),
+    )?;
+    println!(
+        "seeded LP portfolio {} with {} E6 collateral",
+        receipt.lp_portfolio, env_or("MOXIE_LP_DEPOSIT_E6", DEFAULT_LP_DEPOSIT_E6)
+    );
     println!("matcher context {}", receipt.matcher_context);
     Ok(())
 }

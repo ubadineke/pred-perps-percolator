@@ -5,7 +5,7 @@ const deploymentPath = process.argv[2]
   ? new URL(`../${process.argv[2]}`, import.meta.url)
   : new URL("../deployments/localnet.local.json", import.meta.url);
 const deployment = JSON.parse(readFileSync(deploymentPath, "utf8"));
-const rpcUrl = deployment.rpcUrl;
+const rpcUrl = process.env.MOXIE_VERIFY_RPC_URL || deployment.rpcUrl;
 
 function solana(args) {
   return execFileSync("solana", ["--url", rpcUrl, ...args], { encoding: "utf8" });
@@ -42,10 +42,11 @@ for (const imported of deployment.importedMarkets) {
   const bytes = Buffer.from(record.account.data[0], "base64");
   if (imported.marketId === deployment.engineDemo.marketId) {
     assert(Number(bytes.readBigUInt64LE(272)) === 3, `terminal observation sequence missing for ${imported.providerMarketId}`);
-    assert(Number(bytes.readBigUInt64LE(288)) === 1_000_000, `terminal index mismatch for ${imported.providerMarketId}`);
+    const terminalE6 = deployment.engineDemo.terminalOutcome * 1_000_000;
+    assert(Number(bytes.readBigUInt64LE(288)) === terminalE6, `terminal index mismatch for ${imported.providerMarketId}`);
     assert(bytes[336] === 1, `oracle health is not healthy for ${imported.providerMarketId}`);
     assert(bytes[9] === 5, `market did not finish resolved after hard-flat for ${imported.providerMarketId}`);
-    assert(Number(bytes.readBigUInt64LE(280)) === 1_000_000, `terminal YES mark missing for ${imported.providerMarketId}`);
+    assert(Number(bytes.readBigUInt64LE(280)) === terminalE6, `terminal mark mismatch for ${imported.providerMarketId}`);
     assert(Number(bytes.readBigInt64LE(368)) === 0, `funding premium was not cleared at resolution for ${imported.providerMarketId}`);
     assert(Number(bytes.readBigInt64LE(376)) === 0, `funding did not stop at lock for ${imported.providerMarketId}`);
   }
@@ -75,25 +76,44 @@ assert(matcherContext.account.owner === deployment.matcherProgramId, "matcher co
 assert(demo.traderPositionQ === demo.sizeQ, "trader position was not recorded");
 assert(demo.lpPositionQ === -demo.sizeQ, "LP position is not equal and opposite");
 assert(demo.slippageRejectionProven === true, "slippage rejection was not proven");
-assert(demo.fundingEpoch > 0, "bounded funding was not accrued by Percolator");
-assert(demo.fundingLongPaidAtoms > 0, "long funding debit was not settled");
-assert(
-  demo.fundingLongPaidAtoms === demo.fundingShortReceivedAtoms,
-  "funding debit and credit are not zero-sum",
-);
+if (demo.fundingEnabled !== false) {
+  assert(demo.fundingEpoch > 0, "bounded funding was not accrued by Percolator");
+  assert(demo.fundingLongPaidAtoms > 0, "long funding debit was not settled");
+  assert(
+    demo.fundingLongPaidAtoms === demo.fundingShortReceivedAtoms,
+    "funding debit and credit are not zero-sum",
+  );
+} else {
+  assert(demo.fundingEpoch === 0, "funding-disabled proof unexpectedly advanced funding");
+  assert(demo.fundingLongPaidAtoms === 0, "funding-disabled proof charged the long");
+  assert(demo.fundingShortReceivedAtoms === 0, "funding-disabled proof credited the short");
+}
 assert(demo.hardFlatProven === true, "deadline hard-flat did not clear both positions");
 assert(demo.resolutionProven === true, "authenticated final result was not recorded");
-assert(demo.terminalOutcome === 1, "unexpected terminal outcome");
+assert(demo.terminalOutcome === 0 || demo.terminalOutcome === 1, "unexpected terminal outcome");
 assert(demo.withdrawalProven === true, "post-resolution collateral withdrawal was not proven");
 assert(demo.duplicateResolutionRejected === true, "duplicate resolution was not rejected");
 assert(demo.conflictingResolutionRejected === true, "conflicting resolution was not rejected");
+const shared = demo.sharedMargin;
+assert(shared, "shared-margin proof is missing");
+assert(shared.combinedHealth?.valid === true, "combined two-market health was not certified");
+assert(shared.combinedHealth?.activeAssetCount === 2, "portfolio did not hold two active event legs");
+assert(shared.firstPositionFlatAfterResolution === true, "first event did not flatten independently");
+assert(shared.secondPositionPreservedAfterFirstResolution === true, "first resolution altered the second event position");
+assert(shared.secondMarketRecordStillUnresolved === true, "first resolution terminated the second market record");
+assert(shared.withdrawalRejectedWhileSecondPositionOpen === true, "withdrawal was not blocked while the second leg remained open");
+assert(shared.secondPositionFlatAtOwnDeadline === true, "second event did not flatten at its own deadline");
 
 console.log(`ok Percolator program ${deployment.percolatorProgramId}`);
 console.log(`ok matcher program ${deployment.matcherProgramId}`);
 console.log(`ok oracle program ${deployment.oracleProgramId}`);
 console.log(`ok immutable provider-market binding in ${deployment.oracleConfig}`);
 console.log("ok authenticated depth/index inputs produced an on-chain guarded mark");
-console.log("ok absolute-point funding accrued and stopped at lock");
+console.log(
+  demo.fundingEnabled === false
+    ? "ok lifecycle proof is isolated from funding"
+    : "ok absolute-point funding accrued and stopped at lock",
+);
 console.log(`ok market ${deployment.marketAccount} (${market.account.space} bytes)`);
 console.log(`ok mock USDC mint ${deployment.usdcMint}`);
 console.log(`ok collateral vault ${deployment.collateralVault}`);
@@ -101,10 +121,17 @@ console.log(`ok funded trader portfolio ${demo.traderPortfolio}: position ${demo
 console.log(`ok funded LP portfolio ${demo.lpPortfolio}: position ${demo.lpPositionQ}`);
 console.log(`ok TradeCpi ${demo.tradeSignature}`);
 console.log(
-  `ok zero-sum Percolator funding ${demo.fundingLongPaidAtoms} atoms at epoch ${demo.fundingEpoch}`,
+  demo.fundingEnabled === false
+    ? "ok funding disabled for isolated lifecycle proof"
+    : `ok zero-sum Percolator funding ${demo.fundingLongPaidAtoms} atoms at epoch ${demo.fundingEpoch}`,
 );
 console.log("ok lock-clock hard-flat cleared both open positions");
-console.log("ok final provider result resolved the imported event one-way at YES = 1");
+console.log(
+  `ok final provider result resolved the imported event one-way at ${demo.terminalOutcome === 1 ? "YES = 1" : "NO = 0"}`,
+);
 console.log("ok flattened trader withdrew collateral after event resolution");
 console.log("ok duplicate and conflicting terminal results were rejected on-chain");
 console.log("ok matcher rejected a quote beyond the taker's signed limit");
+console.log("ok one portfolio held two event positions with combined certified health");
+console.log("ok resolving event A preserved event B until its independent hard-flat deadline");
+console.log("ok withdrawal was blocked with event B open and succeeded after both legs were flat");

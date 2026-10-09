@@ -1,2 +1,16 @@
 import { AppShell } from "@/components/app-shell";
-export default function Loading(){return <AppShell><div className="admin-page"><div className="admin-title"><div><p className="eyebrow">CONTROL PLANE</p><h1>Market admission</h1></div></div><div className="admin-page-skeleton"><i/><i/><i/></div></div></AppShell>}
+import { Container, PageHeader, Skeleton } from "@/components/ui/primitives";
+
+export default function Loading() {
+  return (
+    <AppShell>
+      <Container className="pb-16" aria-busy="true">
+        <PageHeader eyebrow="Admin · Market authority" title="Market admission" />
+        <div className="grid gap-6 lg:grid-cols-[20rem_minmax(0,1fr)]">
+          <Skeleton className="h-96" />
+          <Skeleton className="h-96" />
+        </div>
+      </Container>
+    </AppShell>
+  );
+}

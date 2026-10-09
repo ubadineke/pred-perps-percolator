@@ -24,9 +24,15 @@ Signal Lime is sparse and high-value. Mint, coral, and amber are semantic only.
 
 ## Typography
 
-- Display: Space Grotesk-style geometric sans, falling back to the local sans stack.
-- Interface: Geist-style neutral sans, falling back to the local sans stack.
-- Numeric: Geist Mono / IBM Plex Mono-style mono with tabular numerals.
+- **Geist** for display and interface text. Headings use semibold with tight tracking (`tracking-tight` / `tracking-tighter` at display sizes); interface text uses regular and medium.
+- **Geist Mono** with tabular numerals for numbers only — prices, sizes, balances, addresses, countdowns. Labels, buttons and tabs stay in Geist.
+- Minimum readable size is 12 px. The scale is Tailwind's default (12 / 14 / 16 / 18 / 20 / 24 / 30 / 36 / 48 / 60).
+
+_Changed 2026-10-08:_ one family (Geist + Geist Mono) replaced the earlier Space Grotesk / Geist / Geist Mono trio. A single family keeps the terminal and marketing pages visually consistent, and Geist's neutral, precise forms suit dense trading data better than Space Grotesk's quirky shapes.
+
+## Tokens
+
+Colors, fonts, radii and motion are defined once as Tailwind v4 theme tokens in `apps/web/app/globals.css` (`bg-surface`, `text-muted`, `border-border`, `text-long`, …). Components never use raw hex values; the only exception is the chart canvas, which mirrors the tokens because it cannot read CSS variables.
 
 ## Voice
 

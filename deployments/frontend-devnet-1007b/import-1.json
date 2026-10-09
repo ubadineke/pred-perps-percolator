@@ -1,0 +1,14 @@
+{
+  "cluster": "devnet",
+  "marketAccount": "AihBkr17D9hSSyWRLK5cetZC2P5xMVbft112bHjZWgc2",
+  "oracleConfig": "BiwsnVJR8UetyQxouof9wX4JhdHazBSj1hbjXXvvzfS3",
+  "record": "GkditTR2jnhfb6QgiNFxerTrajUWydKFu8DQ3eC3rbNg",
+  "providerMarketId": "4J6WxFGuCw9deMJ6pQ7gwpVXCvLorMrz28icSnCYWeGB",
+  "title": "Manchester United will win against Spurs with 2 or more goals",
+  "assetIndex": 1,
+  "marketId": 2,
+  "initialMarkE6": 518009,
+  "closeTime": 1791662400,
+  "activationSignature": "3E4uD2WBPrD8zeSEJezdggTwo7bLpsGFQvmJ4cfmJSuWG2HdRq5mNPPLWjA7oaTwn1NFhiq84rWstMLsTr1X1Mqq",
+  "observationSignature": "D9rjaZZ4u59hKBcaENrC5doCCLC1PGLVxUd5TKiQqmpyh6NxnBGYF8EHDNCgzp1ELHB9QDiUcESdNUmv9jzGGrq"
+}

@@ -1,97 +1,232 @@
 import Link from "next/link";
-import { ArrowRight, Braces, Clock3, Radio, ShieldCheck } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Clock3, Layers, LineChart, Radio, ShieldCheck, TrendingDown, TrendingUp } from "lucide-react";
+import { AppShell } from "@/components/app-shell";
+import { Sparkline } from "@/components/landing/sparkline";
 import { PriceFormation } from "@/components/price-formation";
-import { SiteHeader } from "@/components/site-header";
-import { TradePlayground } from "@/components/trade-playground";
-import { getMarkets } from "@/lib/api";
+import { LinkButton } from "@/components/ui/button";
+import { Badge, Container, LiveDot, MarketAvatar } from "@/components/ui/primitives";
+import { getMarketChart, getMarkets, type ApiChartPoint } from "@/lib/api";
+import { cents, centsChange, countdown } from "@/lib/format";
+import { isTradable, type Market } from "@/lib/markets";
+import { cn } from "@/lib/utils";
+
+export const dynamic = "force-dynamic";
+
+const steps = [
+  { icon: LineChart, title: "Pick a market", text: "Every market is a real-world event, priced from 0¢ to 100¢ by how likely it is." },
+  { icon: TrendingUp, title: "Go long or short", text: "Long if you think the chance is too low, short if it’s too high. One balance backs every position." },
+  { icon: Clock3, title: "Exit any time", text: "Close whenever the price moves your way — or hold until the event resolves." },
+];
+
+const layers = [
+  { icon: Radio, title: "Source index", text: "Live probabilities from external prediction markets anchor every price." },
+  { icon: LineChart, title: "Moxie execution", text: "Inventory-aware quotes and a protected mark keep fills fair and margin honest." },
+  { icon: Layers, title: "Percolator clearing", text: "Shared collateral, positions and solvency checks enforced on Solana." },
+  { icon: ShieldCheck, title: "Event lifecycle", text: "Markets restrict, reduce and settle on schedule as the event approaches." },
+];
 
 export default async function Home() {
-  const markets=await getMarkets().catch(()=>[]);
-  const terminalHref=markets[0]?`/trade/${markets[0].slug}`:"/markets";
+  const markets = await getMarkets().catch(() => [] as Market[]);
+  const featured = markets.find(isTradable) ?? markets[0];
+  const history: ApiChartPoint[] = featured ? await getMarketChart(featured.address, "1d").then((c) => c.mark).catch(() => []) : [];
+
   return (
-    <main className="landing">
-      <SiteHeader floating />
-      <TradePlayground />
-
-      <section className="live-strip" aria-label="Live markets">
-        <span className="live-label"><i /> LIVE</span>
-        {markets.slice(0, 3).map((market) => (
-          <Link href={`/trade/${market.slug}`} key={market.slug}>
-            <span>{market.short}</span>
-            <b>{market.moxie.toFixed(1)}¢</b>
-            <em>{market.change===null?"CHAIN":`${market.change>=0?"+":""}${market.change}%`}</em>
-          </Link>
-        ))}
-        <Link className="all-markets" href="/markets">All markets <ArrowRight size={14} /></Link>
-      </section>
-
-      <section className="manifesto section-shell">
-        <p className="section-index">01 / THESIS</p>
-        <div>
-          <h2>Markets have an opinion.<br /><span>So should the price.</span></h2>
-          <p>External venues define the event and anchor reality. Moxie traders define the perp price between now and resolution.</p>
-        </div>
-      </section>
-
-      <section id="mechanism" className="mechanism section-shell">
-        <div className="section-heading">
-          <p className="section-index">02 / PRICE FORMATION</p>
-          <h2>One event.<br />Three signals.</h2>
-          <p>Order flow moves the Moxie price. A protected mark keeps margin honest. The external index keeps the system grounded.</p>
-        </div>
-        <PriceFormation />
-      </section>
-
-      <section className="terminal-preview section-shell">
-        <div className="terminal-copy">
-          <p className="section-index">03 / EXECUTION</p>
-          <h2>A terminal built for what happens next.</h2>
-          <p>Price, pressure, time and risk—visible before you sign.</p>
-          <Link className="text-link" href={terminalHref}>Open the terminal <ArrowRight size={16} /></Link>
-        </div>
-        <div className="terminal-window">
-          <div className="window-top"><span><i /><i /><i /></span><b>MOXIE / SOL &gt; $250</b><em>ORACLE LIVE</em></div>
-          <div className="window-body">
-            <div className="mini-market">
-              <span>MOXIE PRICE</span><strong>63.4¢</strong><em>+8.2%</em>
-              <div className="mini-chart"><svg viewBox="0 0 500 160" preserveAspectRatio="none"><path d="M0 128 C40 120 52 142 90 110 S150 86 180 101 S230 120 260 76 S300 92 340 55 S390 69 420 32 S470 43 500 18" /></svg></div>
-              <div className="chart-legend"><span>INDEX 61.8</span><span>MARK 62.3</span><span>MOXIE 63.4</span></div>
-            </div>
-            <div className="mini-ticket">
-              <div className="ticket-tabs"><b>LONG</b><span>SHORT</span></div>
-              <label>COLLATERAL <span>AVAILABLE $2,840</span></label>
-              <div className="fake-input"><span>500.00</span><b>USDC</b></div>
-              <label>LEVERAGE <span>3×</span></label>
-              <div className="leverage-track"><i /></div>
-              <dl><div><dt>Position</dt><dd>$1,500</dd></div><div><dt>Est. entry</dt><dd>63.7¢</dd></div><div><dt>Liquidation</dt><dd>43.1¢</dd></div></dl>
-              <button type="button">Review long</button>
+    <AppShell>
+      {/* Hero */}
+      <section className="relative overflow-hidden border-b border-border">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(60%_50%_at_75%_30%,color-mix(in_srgb,var(--color-signal)_8%,transparent),transparent)]" />
+        <Container className="relative grid items-center gap-12 py-16 sm:py-24 lg:grid-cols-[1.25fr_1fr]">
+          <div>
+            <p className="inline-flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-signal">
+              <LiveDot /> Prediction perps on Solana
+            </p>
+            <h1 className="mt-5 text-5xl font-semibold leading-[1.04] tracking-tighter text-foreground sm:text-6xl xl:text-[4.25rem]">
+              Trade the probability,
+              <span className="block text-muted">not just the outcome.</span>
+            </h1>
+            <p className="mt-6 max-w-xl text-lg text-muted">
+              Go long or short on how likely real-world events are, with one shared margin account and risk controls built for markets that end.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-3">
+              <LinkButton href="/trade" size="lg">
+                Start trading <ArrowRight className="size-4" aria-hidden="true" />
+              </LinkButton>
+              <LinkButton href="/markets" size="lg" variant="outline">
+                Browse markets
+              </LinkButton>
             </div>
           </div>
-        </div>
+
+          {featured ? <FeaturedMarket market={featured} history={history} /> : <NoMarketsCard />}
+        </Container>
       </section>
 
-      <section className="architecture section-shell">
-        <div className="section-heading compact-heading">
-          <p className="section-index">04 / UNDER THE SURFACE</p>
-          <h2>Built to clear,<br />not just impress.</h2>
-        </div>
-        <div className="architecture-line">
-          <article><Radio /><span>01</span><h3>Provider index</h3><p>Normalized external probability and executable depth.</p></article>
-          <i />
-          <article><Braces /><span>02</span><h3>Moxie execution</h3><p>Inventory-aware pricing, matching and protected marks.</p></article>
-          <i />
-          <article><ShieldCheck /><span>03</span><h3>Percolator clearing</h3><p>Shared margin, position accounting and solvency checks.</p></article>
-          <i />
-          <article><Clock3 /><span>04</span><h3>Event lifecycle</h3><p>Risk states that understand markets eventually end.</p></article>
-        </div>
+      {/* Live markets */}
+      {markets.length > 1 ? (
+        <section className="border-b border-border">
+          <Container className="py-14">
+            <div className="flex items-end justify-between gap-4">
+              <h2 className="text-2xl font-semibold tracking-tight">Live markets</h2>
+              <Link href="/markets" className="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground">
+                All markets <ArrowRight className="size-4" aria-hidden="true" />
+              </Link>
+            </div>
+            <ul className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {markets.slice(0, 6).map((market) => (
+                <li key={market.slug}>
+                  <Link href={`/trade/${market.slug}`} className="flex h-full items-start gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-2">
+                    <MarketAvatar initials={market.initials} />
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 text-sm font-medium leading-snug text-foreground">{market.question}</span>
+                      <span className="mt-2 flex items-baseline gap-2 font-mono text-sm">
+                        <span>{cents(market.mark)}</span>
+                        <ChangeText value={market.stats.change24hCents} className="text-xs" />
+                      </span>
+                    </span>
+                    <ArrowUpRight className="size-4 shrink-0 text-subtle" aria-hidden="true" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Container>
+        </section>
+      ) : null}
+
+      {/* How it works */}
+      <section className="border-b border-border">
+        <Container className="py-20">
+          <p className="text-xs font-medium uppercase tracking-[0.14em] text-signal">How it works</p>
+          <h2 className="mt-3 max-w-2xl text-3xl font-semibold tracking-tight sm:text-4xl">Markets have an opinion. Now you can trade it.</h2>
+          <ol className="mt-12 grid gap-8 md:grid-cols-3">
+            {steps.map((step, index) => (
+              <li key={step.title}>
+                <div className="flex items-center gap-3">
+                  <span className="grid size-10 place-items-center rounded-md border border-border-strong text-signal">
+                    <step.icon className="size-5" aria-hidden="true" />
+                  </span>
+                  <span className="font-mono text-xs text-subtle">0{index + 1}</span>
+                </div>
+                <h3 className="mt-5 text-lg font-semibold">{step.title}</h3>
+                <p className="mt-2 text-muted">{step.text}</p>
+              </li>
+            ))}
+          </ol>
+        </Container>
       </section>
 
-      <section className="closing">
-        <div className="closing-ring" aria-hidden="true"><i /><i /><i /></div>
-        <p>THE WORLD MOVES<br />BEFORE THE CHART DOES.</p>
-        <Link href="/markets">Find your market <ArrowRight size={18} /></Link>
+      {/* Price formation */}
+      <section className="border-b border-border">
+        <Container className="grid items-center gap-12 py-20 lg:grid-cols-2">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.14em] text-signal">Price formation</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">One event, three prices.</h2>
+            <dl className="mt-8 space-y-5">
+              <div>
+                <dt className="font-medium text-signal">Moxie price</dt>
+                <dd className="mt-1 text-muted">Where you trade. Order flow moves it.</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-warning">Protected mark</dt>
+                <dd className="mt-1 text-muted">What margin uses. It moves gradually, so one trade can’t trigger liquidations.</dd>
+              </div>
+              <div>
+                <dt className="font-medium text-foreground">Source index</dt>
+                <dd className="mt-1 text-muted">The external market’s probability. It keeps Moxie anchored to reality.</dd>
+              </div>
+            </dl>
+          </div>
+          <PriceFormation />
+        </Container>
       </section>
-      <footer><span>© 2026 MOXIE</span><span>DEVNET · EXPERIMENTAL</span><div><Link href="/technology">Technology</Link><a href="#">Risk</a><a href="#">GitHub</a></div></footer>
-    </main>
+
+      {/* Under the hood */}
+      <section className="border-b border-border">
+        <Container className="py-20">
+          <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-[0.14em] text-signal">Under the hood</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">Built to clear, not just to impress.</h2>
+            </div>
+            <Link href="/technology" className="inline-flex items-center gap-1 text-sm font-medium text-muted hover:text-foreground">
+              How Moxie works <ArrowRight className="size-4" aria-hidden="true" />
+            </Link>
+          </div>
+          <ul className="mt-12 grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
+            {layers.map((layer) => (
+              <li key={layer.title} className="bg-background p-6">
+                <layer.icon className="size-5 text-signal" aria-hidden="true" />
+                <h3 className="mt-5 font-semibold">{layer.title}</h3>
+                <p className="mt-2 text-sm text-muted">{layer.text}</p>
+              </li>
+            ))}
+          </ul>
+        </Container>
+      </section>
+
+      {/* Closing */}
+      <section>
+        <Container className="flex flex-col items-start gap-6 py-20 md:flex-row md:items-center md:justify-between">
+          <h2 className="max-w-xl text-3xl font-semibold tracking-tight sm:text-4xl">The world moves before the chart does.</h2>
+          <LinkButton href="/markets" size="lg">
+            Find your market <ArrowRight className="size-4" aria-hidden="true" />
+          </LinkButton>
+        </Container>
+      </section>
+    </AppShell>
+  );
+}
+
+function ChangeText({ value, className }: { value: number | null; className?: string }) {
+  return <span className={cn(value === null || value === 0 ? "text-subtle" : value > 0 ? "text-long" : "text-short", className)}>{centsChange(value)}</span>;
+}
+
+function FeaturedMarket({ market, history }: { market: Market; history: ApiChartPoint[] }) {
+  return (
+    <div className="rounded-xl border border-border bg-surface shadow-2xl shadow-black/40">
+      <div className="flex items-start gap-3 border-b border-border p-5">
+        <MarketAvatar initials={market.initials} size="lg" />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <Badge>{market.providerLabel}</Badge>
+            <Badge tone={market.status === 1 ? "long" : "warning"}>{market.lifecycle}</Badge>
+          </div>
+          <p className="mt-2 font-medium leading-snug text-foreground">{market.question}</p>
+        </div>
+      </div>
+      <div className="p-5">
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-xs text-subtle">Moxie price</p>
+            <p className="mt-1 font-mono text-4xl font-medium tracking-tight">{cents(market.mark)}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-subtle">24h</p>
+            <p className="mt-1 font-mono text-sm"><ChangeText value={market.stats.change24hCents} /></p>
+          </div>
+        </div>
+        <Sparkline points={history} className="mt-4 h-28 w-full" />
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <LinkButton href={`/trade/${market.slug}`} variant="long">
+            <TrendingUp className="size-4" aria-hidden="true" /> Long · Yes
+          </LinkButton>
+          <LinkButton href={`/trade/${market.slug}`} variant="short">
+            <TrendingDown className="size-4" aria-hidden="true" /> Short · No
+          </LinkButton>
+        </div>
+      </div>
+      <div className="flex items-center justify-between border-t border-border px-5 py-3 text-xs text-subtle">
+        <span className="inline-flex items-center gap-1.5"><ShieldCheck className="size-3.5 text-long" aria-hidden="true" /> Protected mark</span>
+        <span>Closes in <span className="font-mono text-muted">{countdown(market.closeTime)}</span></span>
+      </div>
+    </div>
+  );
+}
+
+function NoMarketsCard() {
+  return (
+    <div className="rounded-xl border border-dashed border-border-strong p-8 text-center">
+      <p className="font-medium">Markets are on their way</p>
+      <p className="mt-1 text-sm text-muted">New markets appear here as soon as they’re admitted.</p>
+    </div>
   );
 }

@@ -1,1 +1,26 @@
-"use client";import Link from"next/link";import{AppShell}from"@/components/app-shell";export default function Error({reset}:{reset:()=>void}){return <AppShell><div className="page-container"><div className="empty-activity"><div><b>Terminal data is unavailable</b><span>The market may not be indexed, or the API may be offline.</span></div><button type="button" onClick={reset}>Retry</button><Link href="/markets">Back to markets</Link></div></div></AppShell>}
+"use client";
+
+import { AppShell } from "@/components/app-shell";
+import { Button, LinkButton } from "@/components/ui/button";
+import { Container, EmptyState } from "@/components/ui/primitives";
+
+export default function TradeError({ reset }: { reset: () => void }) {
+  return (
+    <AppShell>
+      <Container className="py-16">
+        <div className="rounded-lg border border-border">
+          <EmptyState
+            title="This market couldn’t load"
+            description="The market data service didn’t respond."
+            action={
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={reset}>Try again</Button>
+                <LinkButton variant="ghost" href="/markets">All markets</LinkButton>
+              </div>
+            }
+          />
+        </div>
+      </Container>
+    </AppShell>
+  );
+}

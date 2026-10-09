@@ -3,7 +3,7 @@ export type PercolatorMarketGroupConfig = {
   name: string;
   quote: { symbol: "USDC"; decimals: 6; mint: string | null };
   portfolio: { maxAssets: number; onePerOwner: boolean };
-  activation: { mode: "admin-allowlist"; provider: "jupiter" };
+  activation: { mode: "admin-allowlist"; provider: "jupiter" | "panta" };
   price: { decimals: 6; minimumE6: number; maximumE6: number; initialE6: number };
   risk: {
     maintenanceMarginBps: number;
@@ -11,7 +11,10 @@ export type PercolatorMarketGroupConfig = {
     maxTradingFeeBps: number;
     tradeFeeBaseBps: number;
     liquidationFeeBps: number;
+    liquidationFeeCapAtoms: number;
+    minLiquidationFeeAtoms: number;
     maxPriceMoveBpsPerSlot: number;
+    maxAccrualDtSlots?: number;
     maxAbsFundingE9PerSlot: number;
   };
 };
@@ -27,7 +30,7 @@ export function validateMarketGroupConfig(value: unknown): asserts value is Perc
   const config = value as Partial<PercolatorMarketGroupConfig>;
   if (config.schemaVersion !== 1) throw new TypeError("unsupported market group schemaVersion");
   if (config.quote?.symbol !== "USDC" || config.quote.decimals !== 6) throw new TypeError("V1 quote must be 6-decimal USDC");
-  if (config.activation?.provider !== "jupiter" || config.activation.mode !== "admin-allowlist") throw new TypeError("V1 activation must be Jupiter admin-allowlist");
+  if (!(["jupiter", "panta"] as const).includes(config.activation?.provider as "jupiter" | "panta") || config.activation?.mode !== "admin-allowlist") throw new TypeError("V1 activation must use an approved prediction provider and admin allowlist");
   integerIn(config.portfolio?.maxAssets, 1, 32, "portfolio.maxAssets");
   integerIn(config.price?.initialE6, 1, 999_999, "price.initialE6");
   integerIn(config.risk?.maintenanceMarginBps, 1, 10_000, "risk.maintenanceMarginBps");
@@ -35,7 +38,11 @@ export function validateMarketGroupConfig(value: unknown): asserts value is Perc
   integerIn(config.risk?.maxTradingFeeBps, 0, 10_000, "risk.maxTradingFeeBps");
   integerIn(config.risk?.tradeFeeBaseBps, 0, config.risk!.maxTradingFeeBps, "risk.tradeFeeBaseBps");
   integerIn(config.risk?.liquidationFeeBps, 0, 10_000, "risk.liquidationFeeBps");
+  integerIn(config.risk?.liquidationFeeCapAtoms, 0, Number.MAX_SAFE_INTEGER, "risk.liquidationFeeCapAtoms");
+  integerIn(config.risk?.minLiquidationFeeAtoms, 0, config.risk!.liquidationFeeCapAtoms, "risk.minLiquidationFeeAtoms");
   integerIn(config.risk?.maxPriceMoveBpsPerSlot, 1, 10_000, "risk.maxPriceMoveBpsPerSlot");
+  if (config.risk!.maxPriceMoveBpsPerSlot % 100 !== 0) throw new TypeError("risk.maxPriceMoveBpsPerSlot must be expressed in whole engine bps (multiples of 100 config units)");
+  if (config.risk?.maxAccrualDtSlots !== undefined) integerIn(config.risk.maxAccrualDtSlots, 1, 10_000, "risk.maxAccrualDtSlots");
   integerIn(config.risk?.maxAbsFundingE9PerSlot, 0, 10_000, "risk.maxAbsFundingE9PerSlot");
 }
 
@@ -46,19 +53,19 @@ export function toPercolatorInitMarket(config: PercolatorMarketGroupConfig) {
     h_min: 0,
     h_max: 10,
     initial_price: config.price.initialE6,
-    min_nonzero_mm_req: 1n,
-    min_nonzero_im_req: 2n,
+    min_nonzero_mm_req: BigInt(config.risk.minLiquidationFeeAtoms) + 2n,
+    min_nonzero_im_req: BigInt(config.risk.minLiquidationFeeAtoms) + 3n,
     maintenance_margin_bps: config.risk.maintenanceMarginBps,
     initial_margin_bps: config.risk.initialMarginBps,
     max_trading_fee_bps: config.risk.maxTradingFeeBps,
     trade_fee_base_bps: config.risk.tradeFeeBaseBps,
     liquidation_fee_bps: config.risk.liquidationFeeBps,
-    liquidation_fee_cap: 0n,
-    min_liquidation_abs: 0n,
-    max_price_move_bps_per_slot: config.risk.maxPriceMoveBpsPerSlot,
-    max_accrual_dt_slots: 1,
+    liquidation_fee_cap: BigInt(config.risk.liquidationFeeCapAtoms),
+    min_liquidation_abs: BigInt(config.risk.minLiquidationFeeAtoms),
+    max_price_move_bps_per_slot: config.risk.maxPriceMoveBpsPerSlot / 100,
+    max_accrual_dt_slots: config.risk.maxAccrualDtSlots ?? 100,
     max_abs_funding_e9_per_slot: config.risk.maxAbsFundingE9PerSlot,
-    min_funding_lifetime_slots: 1,
+    min_funding_lifetime_slots: Math.max(config.risk.maxAccrualDtSlots ?? 100, 100),
     max_account_b_settlement_chunks: 1,
     max_bankrupt_close_chunks: 1,
     max_bankrupt_close_lifetime_slots: 100,

@@ -1,0 +1,35 @@
+{
+  "schemaVersion": 1,
+  "name": "moxie-devnet-simulation-5x",
+  "quote": {
+    "symbol": "USDC",
+    "decimals": 6,
+    "mint": null
+  },
+  "portfolio": {
+    "maxAssets": 8,
+    "onePerOwner": true
+  },
+  "activation": {
+    "mode": "admin-allowlist",
+    "provider": "panta"
+  },
+  "price": {
+    "decimals": 6,
+    "minimumE6": 1,
+    "maximumE6": 999999,
+    "initialE6": 500000
+  },
+  "risk": {
+    "maintenanceMarginBps": 1000,
+    "initialMarginBps": 2000,
+    "maxTradingFeeBps": 500,
+    "tradeFeeBaseBps": 30,
+    "liquidationFeeBps": 100,
+    "liquidationFeeCapAtoms": 50000,
+    "minLiquidationFeeAtoms": 0,
+    "maxPriceMoveBpsPerSlot": 1000,
+    "maxAccrualDtSlots": 10,
+    "maxAbsFundingE9PerSlot": 10000
+  }
+}

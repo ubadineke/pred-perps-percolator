@@ -1,10 +1,33 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
-import { Terminal } from "@/components/terminal";
-import { getMarket,getMarkets } from "@/lib/api";
+import { TradeTerminal } from "@/components/trade/trade-terminal";
+import { getMarket, getMarkets, NotIndexedError } from "@/lib/api";
+import { getExecutionConfig } from "@/lib/execution";
+
+export const dynamic = "force-dynamic";
+
+async function load(slug: string) {
+  try {
+    return await Promise.all([getMarket(slug), getMarkets()]);
+  } catch (cause) {
+    if (cause instanceof NotIndexedError) notFound();
+    throw cause;
+  }
+}
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
+  const { slug } = await params;
+  const market = await getMarket(slug).catch(() => null);
+  return { title: market?.question ?? "Trade" };
+}
 
 export default async function TradePage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const [market,markets]=await Promise.all([getMarket(slug),getMarkets()]);
-  const execution={cluster:process.env.MOXIE_CLUSTER??"devnet",percolatorProgramId:process.env.PERCOLATOR_PROGRAM_ID??"",marketAccount:process.env.MOXIE_MARKET_ACCOUNT??"",usdcMint:process.env.MOXIE_USDC_MINT??"",collateralVault:process.env.MOXIE_COLLATERAL_VAULT??"",lpPortfolio:process.env.MOXIE_LP_PORTFOLIO??"",matcherProgramId:process.env.MOXIE_MATCHER_PROGRAM_ID??"",matcherContext:process.env.MOXIE_MATCHER_CONTEXT??"",matcherDelegate:process.env.MOXIE_MATCHER_DELEGATE??"",portfolioAccountSize:9563,maxLeverage:1};
-  return <AppShell><Terminal market={market} markets={markets} execution={execution} /></AppShell>;
+  const [market, markets] = await load(slug);
+  return (
+    <AppShell bare>
+      <TradeTerminal market={market} markets={markets} config={getExecutionConfig()} />
+    </AppShell>
+  );
 }

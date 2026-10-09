@@ -2,22 +2,34 @@
   {
     "provider": "jupiter",
     "providerMarketId": "POLY-5041239-0",
-    "title": "Chengdu Open: Hubert Hurkacz vs Denis Shapovalov — Hubert Hurkacz"
+    "title": "Chengdu Open: Hubert Hurkacz vs Denis Shapovalov \u2014 Hubert Hurkacz"
   },
   {
     "provider": "jupiter",
     "providerMarketId": "POLY-5055799-0",
-    "title": "Adana: Elena Ruxandra Bertea vs Lucrezia Stefanini — Elena Ruxandra Bertea"
+    "title": "Adana: Elena Ruxandra Bertea vs Lucrezia Stefanini \u2014 Elena Ruxandra Bertea"
   },
   {
     "provider": "jupiter",
     "providerMarketId": "POLY-5025003-0",
-    "title": "Bari: Matteo Sciahbasi vs Juan Martin — Matteo Sciahbasi"
+    "title": "Bari: Matteo Sciahbasi vs Juan Martin \u2014 Matteo Sciahbasi"
   },
   {
     "provider": "panta",
     "providerMarketId": "5cyMGUVDcToJ8ws5V1sKkGnzthLrLTsqEjo3Pa2HNU8v",
     "title": "France will concede in the first 25 minutes against Belgium on the 05 October.",
     "rules": "France concedes a goal by the 25th minute.\n\nSources: https://www.fifa.com, https://www.uefa.com"
+  },
+  {
+    "provider": "panta",
+    "providerMarketId": "4J6WxFGuCw9deMJ6pQ7gwpVXCvLorMrz28icSnCYWeGB",
+    "title": "Manchester United will win against Spurs with 2 or more goals",
+    "rules": "Manchester United are will win against Spurs with 2 or more goals\n\nSources: https://www.espn.com, https://www.bbc.com/sport, https://www.premierleague.com"
+  },
+  {
+    "provider": "panta",
+    "providerMarketId": "C86nbpSX4ntRWvN4HMrdnhzHjHTtLooNtnw6k7hnmx1F",
+    "title": "Saka 7+ points, GW6",
+    "rules": "Resolves YES if the official Fantasy Premier League site credits Bukayo Saka with 7 or more points for Gameweek 6, once every match in that gameweek is marked finished and bonus points are final. Resolves NO otherwise.\n\nSources: https://fantasy.premierleague.com/api/bootstrap-static/, https://fantasy.premierleague.com/api/event/6/live/"
   }
 ]

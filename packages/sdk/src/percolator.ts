@@ -22,7 +22,9 @@ export function buildWithdrawData(portfolioId: bigint, sequence: bigint, amount:
 }
 export function buildTradeCpiData(r: TradeRequest): Uint8Array {
   if(!r.sizeQ) throw new Error("trade size cannot be zero");
-  const b=out(10,100),v=view(b); let o=1;
+  // tag(1) + 5×u64 + asset u16 + market u64 + size i128 + fee u64 + limit u64 + backing cap u16 = 85
+  // bytes; the program rejects trailing instruction data.
+  const b=out(10,85),v=view(b); let o=1;
   for(const x of [r.traderPortfolioId,r.traderPositionEpoch,r.lpPortfolioId,r.lpPositionEpoch,r.lpMatcherSequence]){u64(v,o,x);o+=8}
   u16(v,o,r.assetIndex);o+=2;u64(v,o,r.marketId);o+=8;i128(v,o,r.sizeQ);o+=16;u64(v,o,r.feeBps);o+=8;u64(v,o,r.limitPriceE6);o+=8;u16(v,o,r.backingFeeCapBps??0);return b;
 }

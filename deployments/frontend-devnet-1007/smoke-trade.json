@@ -1,0 +1,17 @@
+{
+  "cluster": "devnet",
+  "marketAccount": "4zYC82sAqWqSPHmpq33yLEGYXvAdSB7QtJRVa5Pno7DS",
+  "trader": "G16cv7UtQ27Sa3sg7XsmnfVRnbkcgiWud2JXEVf3EXF4",
+  "traderPortfolio": "A9uTNkSo8LrqLjYvbQsgBuSgNPjmsa8HsfKSd4eXQkCi",
+  "lpPortfolio": "4WXqA3ipudXu4yMjwmU2uenxPS7JmdRizLeGNTgMJdDQ",
+  "assetIndex": 1,
+  "marketId": 2,
+  "sizeQ": 1000000,
+  "depositSignature": "4rYYkzef2JJ4unTjY7WVsBBsvRZizbUU2SWJCCkbvpwRAq2957X1gyCvu43HfCJeAVMevAEPoFScWtvvoEfw3Xmp",
+  "longOpenSignature": "41q1QRtSK8GUPNCGiwY5BWFmbMupcUV9Mt3tU9xBHWrcyz8dJKG6wBVUeMouoRohTHMZp32Jebg7AQXzVAPmPoVG",
+  "longCloseSignature": "2C7pGVxPUbozn5sdrPAhYVURasYudEVBh26NixUFHGGXvGP1PURzUhJBnVcHP2FZan3ZKYNievux54tff5u6fvyf",
+  "shortOpenSignature": "3Zx18VpNFczUCZTrPf8jkHoJRoUcPaxpFQLWPPU9pXtq89jbBU2KzPnCikWzKXMusXWArQgxebVnfWMpcB4BQrgx",
+  "shortCloseSignature": "4GYNdCBcLddSUFuHJqdarBgZBpbbcgsoZ8BHLd2v498doEeoEeLygKpj2XwPL33caGR4zXpUPrtNQGcFiNrY14M",
+  "traderFinalPositionQ": 0,
+  "lpFinalPositionQ": 0
+}

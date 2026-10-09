@@ -41,7 +41,8 @@ fn main() -> Result<()> {
     let asset_index: usize = args[6].parse()?;
     let portfolio_a = Pubkey::from_str(&args[7])?;
     let portfolio_b = Pubkey::from_str(&args[8])?;
-    let payer: Keypair = read_keypair_file(&args[9]).map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let payer: Keypair =
+        read_keypair_file(&args[9]).map_err(|error| anyhow::anyhow!(error.to_string()))?;
     let (config, _) = Pubkey::find_program_address(&[b"config", market.as_ref()], &oracle_program);
     let (a_id, a_epoch, a_position) = snapshot(&client, &portfolio_a, asset_index)?;
     let (b_id, b_epoch, b_position) = snapshot(&client, &portfolio_b, asset_index)?;

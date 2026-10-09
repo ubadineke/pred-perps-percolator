@@ -1,0 +1,14 @@
+{
+  "cluster": "devnet",
+  "marketAccount": "AihBkr17D9hSSyWRLK5cetZC2P5xMVbft112bHjZWgc2",
+  "oracleConfig": "BiwsnVJR8UetyQxouof9wX4JhdHazBSj1hbjXXvvzfS3",
+  "record": "DTixFhdpGh9vNpU4JFxp4cq5onoTwtNbm3BpJuMRL2qm",
+  "providerMarketId": "C86nbpSX4ntRWvN4HMrdnhzHjHTtLooNtnw6k7hnmx1F",
+  "title": "Saka 7+ points, GW6",
+  "assetIndex": 2,
+  "marketId": 3,
+  "initialMarkE6": 500167,
+  "closeTime": 1791639000,
+  "activationSignature": "v7FhJN9jdC1ixxeDTZbSnJLSWk8TX4XTz7cEBNBtTV5UJp7hYXXKBoqMYU2NCmJciHU8fo9cax3syek5p6AsUJW",
+  "observationSignature": "4f81XZh2C5X4gn66sm6JjUbBJrPG9ikJnRtSWJouZSxhPiKByr2VgdDpLeZnoTiufgc4SbMhNrMEFm7a78NHAkjr"
+}

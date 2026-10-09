@@ -3,18 +3,21 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletReadyState } from "@solana/wallet-adapter-base";
-import { Check, ChevronRight, LogOut, Mail, Wallet, X } from "lucide-react";
+import { Check, ChevronRight, Copy, LogOut, Mail, Wallet, X } from "lucide-react";
 import { usePrivyWalletState } from "./wallet-providers";
-
-function shortAddress(address: string) {
-  return `${address.slice(0, 4)}…${address.slice(-4)}`;
-}
+import { Alert } from "./ui/primitives";
+import { buttonClasses } from "./ui/button";
+import { shortAddress } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export function WalletControl() {
   const [open, setOpen] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const privy = usePrivyWalletState();
   const external = useWallet();
 
@@ -26,16 +29,17 @@ export function WalletControl() {
   const activeAddress = externalAddress ?? privy.address;
   const activeLabel = externalAddress ? external.wallet?.adapter.name : privy.address ? "Privy" : null;
 
+  // Modal behaviour: lock scroll, focus the close button, trap Tab, close on Escape, restore focus.
   useEffect(() => {
     if (!open) return;
+    const trigger = triggerRef.current;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     closeButtonRef.current?.focus();
-    const handleDialogKeys = (event: KeyboardEvent) => {
+    const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") setOpen(false);
       if (event.key !== "Tab") return;
-      const dialog = closeButtonRef.current?.closest("[role='dialog']");
-      const focusable = dialog?.querySelectorAll<HTMLElement>("button:not(:disabled), a[href], input:not(:disabled)");
+      const focusable = dialogRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled), a[href], input:not(:disabled)");
       if (!focusable?.length) return;
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
@@ -47,10 +51,11 @@ export function WalletControl() {
         first.focus();
       }
     };
-    document.addEventListener("keydown", handleDialogKeys);
+    document.addEventListener("keydown", onKey);
     return () => {
       document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", handleDialogKeys);
+      document.removeEventListener("keydown", onKey);
+      trigger?.focus();
     };
   }, [open]);
 
@@ -81,84 +86,128 @@ export function WalletControl() {
     }
   }
 
+  async function copyAddress() {
+    if (!activeAddress) return;
+    await navigator.clipboard.writeText(activeAddress).catch(() => undefined);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1_500);
+  }
+
   return (
     <>
       <button
-        className={`wallet-button${activeAddress ? " connected" : ""}`}
+        ref={triggerRef}
         type="button"
         onClick={() => {
           setError(null);
           setOpen(true);
         }}
         aria-haspopup="dialog"
+        className={buttonClasses({ variant: activeAddress ? "outline" : "primary", size: "md", className: "h-9 px-3.5" })}
       >
-        <Wallet size={16} aria-hidden="true" />
-        {activeAddress ? shortAddress(activeAddress) : "Connect"}
+        <Wallet className="size-4" aria-hidden="true" />
+        {activeAddress ? <span className="font-mono text-sm">{shortAddress(activeAddress)}</span> : "Connect"}
       </button>
 
       {open ? (
-        <div className="wallet-modal-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}>
-          <section className="wallet-modal" role="dialog" aria-modal="true" aria-labelledby="wallet-modal-title">
-            <header>
+        <div
+          className="fixed inset-0 z-50 grid place-items-end bg-black/70 p-0 backdrop-blur-sm sm:place-items-center sm:p-4"
+          role="presentation"
+          onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}
+        >
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wallet-dialog-title"
+            className="w-full max-w-md rounded-t-xl border border-border bg-surface shadow-2xl sm:rounded-xl"
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-border p-5">
               <div>
-                <span className="wallet-modal-index">ACCOUNT / SOLANA</span>
-                <h2 id="wallet-modal-title">{activeAddress ? "Wallet connected" : "Enter Moxie"}</h2>
-                <p>{activeAddress ? "Your active signing account." : "Choose fast onboarding or connect an existing wallet."}</p>
+                <h2 id="wallet-dialog-title" className="text-lg font-semibold">{activeAddress ? "Wallet connected" : "Connect a wallet"}</h2>
+                <p className="mt-1 text-sm text-muted">{activeAddress ? "This account signs your Moxie transactions." : "Use an existing Solana wallet, or sign in with email."}</p>
               </div>
-              <button ref={closeButtonRef} className="wallet-modal-close" type="button" onClick={() => setOpen(false)} aria-label="Close wallet dialog">
-                <X size={17} aria-hidden="true" />
+              <button ref={closeButtonRef} type="button" onClick={() => setOpen(false)} aria-label="Close" className="grid size-9 shrink-0 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-foreground">
+                <X className="size-4" aria-hidden="true" />
               </button>
-            </header>
+            </div>
 
-            {activeAddress ? (
-              <div className="wallet-connected-panel">
-                <span className="wallet-source"><Check size={13} aria-hidden="true" /> {activeLabel}</span>
-                <code>{activeAddress}</code>
-                <button className="wallet-disconnect" type="button" onClick={disconnectActive}>
-                  <LogOut size={15} aria-hidden="true" /> Disconnect
-                </button>
-              </div>
-            ) : (
-              <div className="wallet-methods">
-                <button
-                  className="wallet-method featured"
-                  type="button"
-                  onClick={() => privy.login()}
-                  disabled={!privy.enabled || !privy.ready}
-                >
-                  <span className="wallet-method-icon"><Mail size={18} aria-hidden="true" /></span>
-                  <span><strong>Continue with Privy</strong><small>Email or Google · wallet created for you</small></span>
-                  <ChevronRight size={16} aria-hidden="true" />
-                </button>
-                {!privy.enabled ? <p className="wallet-config-note">Privy needs <code>NEXT_PUBLIC_PRIVY_APP_ID</code>. Regular wallets remain available.</p> : null}
-
-                <div className="wallet-divider"><span>OR USE A SOLANA WALLET</span></div>
-
-                <div className="wallet-list">
-                  {externalWallets.length ? externalWallets.map(({ adapter, readyState }) => {
-                    const installed = readyState === WalletReadyState.Installed || readyState === WalletReadyState.Loadable;
-                    return (
-                      <button className="wallet-method" type="button" key={adapter.name} onClick={() => connectExternal(adapter.name)} disabled={connecting !== null}>
-                        <span className="wallet-method-icon wallet-icon-image"><img src={adapter.icon} alt="" /></span>
-                        <span><strong>{adapter.name}</strong><small>{connecting === adapter.name ? "Waiting for approval…" : installed ? "Detected in this browser" : "Open wallet"}</small></span>
-                        <ChevronRight size={16} aria-hidden="true" />
-                      </button>
-                    );
-                  }) : (
-                    <div className="wallet-empty-state">
-                      <Wallet size={18} aria-hidden="true" />
-                      <span><strong>No Solana wallet detected</strong><small>Install Phantom, Solflare, or Backpack, then reload.</small></span>
+            <div className="space-y-4 p-5">
+              {activeAddress ? (
+                <>
+                  <div className="rounded-md border border-border bg-surface-2 p-3">
+                    <p className="flex items-center gap-1.5 text-xs font-medium text-long"><Check className="size-3.5" aria-hidden="true" /> {activeLabel}</p>
+                    <p className="mt-2 break-all font-mono text-sm text-foreground">{activeAddress}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button type="button" onClick={copyAddress} className={buttonClasses({ variant: "outline" })}>
+                      {copied ? <Check className="size-4" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
+                      {copied ? "Copied" : "Copy address"}
+                    </button>
+                    <button type="button" onClick={disconnectActive} className={buttonClasses({ variant: "outline" })}>
+                      <LogOut className="size-4" aria-hidden="true" /> Disconnect
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {privy.enabled ? (
+                    <WalletOption
+                      icon={<Mail className="size-4" aria-hidden="true" />}
+                      title="Continue with email"
+                      subtitle="Email or Google — a wallet is created for you"
+                      onClick={() => privy.login()}
+                      disabled={!privy.ready}
+                    />
+                  ) : null}
+                  <div>
+                    <p className="mb-2 text-xs font-medium text-subtle">Solana wallets</p>
+                    <div className="space-y-2">
+                      {externalWallets.length ? (
+                        externalWallets.map(({ adapter, readyState }) => {
+                          const installed = readyState === WalletReadyState.Installed || readyState === WalletReadyState.Loadable;
+                          return (
+                            <WalletOption
+                              key={adapter.name}
+                              icon={<img src={adapter.icon} alt="" className="size-5 rounded" />}
+                              title={adapter.name}
+                              subtitle={connecting === adapter.name ? "Waiting for approval…" : installed ? "Detected in this browser" : "Open wallet"}
+                              onClick={() => connectExternal(adapter.name)}
+                              disabled={connecting !== null}
+                            />
+                          );
+                        })
+                      ) : (
+                        <Alert title="No Solana wallet detected">Install Phantom, Solflare or Backpack, then reload this page.</Alert>
+                      )}
                     </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {error ? <p className="wallet-error" role="alert">{error}</p> : null}
-            <footer>Transactions always require your explicit approval.</footer>
-          </section>
+                  </div>
+                </>
+              )}
+              {error ? <Alert tone="error">{error}</Alert> : null}
+            </div>
+            <p className="border-t border-border px-5 py-3 text-xs text-subtle">Every transaction asks for your approval in the wallet first.</p>
+          </div>
         </div>
       ) : null}
     </>
+  );
+}
+
+function WalletOption({ icon, title, subtitle, onClick, disabled }: { icon: React.ReactNode; title: string; subtitle: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn("flex w-full items-center gap-3 rounded-md border border-border bg-surface-2 p-3 text-left transition-colors hover:border-border-strong hover:bg-surface-3 disabled:opacity-50")}
+    >
+      <span className="grid size-9 shrink-0 place-items-center rounded-md bg-surface-3 text-foreground">{icon}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium text-foreground">{title}</span>
+        <span className="block text-xs text-subtle">{subtitle}</span>
+      </span>
+      <ChevronRight className="size-4 text-subtle" aria-hidden="true" />
+    </button>
   );
 }

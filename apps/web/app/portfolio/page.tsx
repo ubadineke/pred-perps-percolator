@@ -1,6 +1,21 @@
-import{ArrowDownLeft,ArrowUpRight,Clock3,WalletCards}from"lucide-react";import{AppShell}from"@/components/app-shell";import{getPortfolio}from"@/lib/api";
-export const dynamic="force-dynamic";
-const usdc=(atoms:string)=>`$${(Number(atoms)/1_000_000).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-export default async function PortfolioPage(){const address=process.env.MOXIE_PORTFOLIO_ADDRESS;if(!address)return <AppShell><div className="page-container portfolio-page"><div className="page-title"><div><p className="eyebrow">SHARED MARGIN</p><h1>Portfolio</h1><p>One collateral account across every active prediction perp.</p></div></div><div className="empty-activity"><WalletCards size={24}/><div><b>No portfolio selected</b><span>Set MOXIE_PORTFOLIO_ADDRESS to inspect an indexed account. Wallet discovery comes next.</span></div></div></div></AppShell>;
- const p=await getPortfolio(address),equity=BigInt(p.health.equity),maintenance=BigInt(p.health.maintenanceRequirement),available=equity>maintenance?equity-maintenance:0n,utilization=equity>0n?Number(maintenance*10_000n/equity)/100:0;
- return <AppShell><div className="page-container portfolio-page"><div className="page-title"><div><p className="eyebrow">SHARED MARGIN</p><h1>Portfolio</h1><p>One collateral account across every active prediction perp.</p></div><div className="portfolio-actions"><button type="button"><ArrowDownLeft size={16}/> Deposit</button><button type="button"><ArrowUpRight size={16}/> Withdraw</button></div></div><div className="equity-grid"><article className="equity-main"><span>PORTFOLIO EQUITY</span><strong>{usdc(p.health.equity)}</strong><em className={BigInt(p.pnl)>=0n?"positive":"negative"}>{usdc(p.pnl)} unrealized PnL</em><div className="equity-line"><i/><i/><i/><i/><i/><i/></div></article><article><span>AVAILABLE COLLATERAL</span><strong>{usdc(available.toString())}</strong><small>after maintenance requirement</small></article><article><span>ACTIVE MARKETS</span><strong>{p.positions.length}</strong><small>one shared margin account</small></article><article><span>MARGIN UTILIZATION</span><strong>{utilization.toFixed(1)}%</strong><div className="util-bar"><i style={{width:`${Math.min(utilization,100)}%`}}/></div></article></div><div className="portfolio-columns"><section className="portfolio-panel"><header><div><h2>Open positions</h2><span>{p.positions.length} ACTIVE</span></div></header>{p.positions.length?p.positions.map(x=><div className="portfolio-position" key={x.slot}><div className="position-name"><i>{x.side==="long"?"L":"S"}</i><span><b>MARKET {x.marketId}</b><em>{x.side.toUpperCase()} · Asset {x.assetIndex}</em></span></div><dl><div><dt>SIZE Q</dt><dd>{x.sizeQ}</dd></div><div><dt>ENTRY NOTIONAL</dt><dd>{x.entryNotional}</dd></div><div><dt>STATE</dt><dd>{x.stale?"Refresh needed":"Current"}</dd></div></dl></div>):<div className="empty-activity"><div><b>No open positions</b><span>This portfolio is funded but currently flat.</span></div></div>}</section><aside className="health-card"><div className="health-ring"><span><b>{p.health.valid?"OK":"—"}</b></span></div><h2>{p.health.liquidationDeficit==="0"?"Healthy":"At risk"}</h2><p>Health is decoded directly from Percolator&apos;s certified portfolio state.</p><dl><div><dt>Maintenance margin</dt><dd>{usdc(p.health.maintenanceRequirement)}</dd></div><div><dt>Liquidation deficit</dt><dd>{usdc(p.health.liquidationDeficit)}</dd></div><div><dt>Indexed slot</dt><dd><Clock3 size={13}/>{p.slot}</dd></div></dl></aside></div></div></AppShell>}
+import type { Metadata } from "next";
+import { AppShell } from "@/components/app-shell";
+import { PortfolioView } from "@/components/account/portfolio-view";
+import { Container, PageHeader } from "@/components/ui/primitives";
+import { getMarkets } from "@/lib/api";
+import { getExecutionConfig } from "@/lib/execution";
+
+export const metadata: Metadata = { title: "Portfolio" };
+export const dynamic = "force-dynamic";
+
+export default async function PortfolioPage() {
+  const markets = await getMarkets().catch(() => []);
+  return (
+    <AppShell>
+      <Container className="pb-16">
+        <PageHeader eyebrow="Portfolio" title="Your account" description="One collateral balance backs every position, across every market." />
+        <PortfolioView config={getExecutionConfig()} markets={markets} />
+      </Container>
+    </AppShell>
+  );
+}
