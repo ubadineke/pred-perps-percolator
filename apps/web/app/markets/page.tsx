@@ -11,7 +11,7 @@ export const metadata: Metadata = { title: "Markets" };
 export const dynamic = "force-dynamic";
 
 export default async function MarketsPage() {
-  const [marketsResult, pantaResult, statusResult] = await Promise.allSettled([getMarkets(), getPantaMarkets(), getPantaStatus()]);
+  const [marketsResult, pantaResult, statusResult] = await Promise.allSettled([getMarkets(), getPantaMarkets(100, "open"), getPantaStatus()]);
   const markets = marketsResult.status === "fulfilled" ? marketsResult.value : [];
   const pantaMarkets = pantaResult.status === "fulfilled" ? pantaResult.value : [];
   const pantaStatus = statusResult.status === "fulfilled" ? statusResult.value : undefined;
@@ -23,8 +23,8 @@ export default async function MarketsPage() {
       <Container className="pb-16">
         <PageHeader
           eyebrow="Markets"
-          title="Trade the probability"
-          description="Go long or short on how likely an event is — and exit any time before it resolves."
+          title="What’s your call?"
+          description="Go long or short on real-world events, and exit whenever you like."
           actions={
             <dl className="grid grid-cols-3 gap-8">
               <Stat label="Markets" value={markets.length} />
@@ -46,7 +46,7 @@ export default async function MarketsPage() {
           {pantaResult.status === "rejected" ? (
             <Alert title="Source markets unavailable">Panta’s catalog couldn’t be loaded. Moxie markets above are unaffected.</Alert>
           ) : (
-            <PantaMarketGrid markets={pantaMarkets} status={pantaStatus} />
+            <PantaMarketGrid markets={pantaMarkets} moxieMarkets={markets} status={pantaStatus} />
           )}
         </div>
       </Container>

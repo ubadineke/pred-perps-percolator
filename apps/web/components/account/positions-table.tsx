@@ -5,7 +5,7 @@ import type { MoxieAccount } from "@/hooks/use-moxie-account";
 import type { ApiPosition } from "@/lib/api";
 import type { Market } from "@/lib/markets";
 import { entryPriceCents, positionPnlUsd } from "@/lib/moxie-client";
-import { cents, contracts, qToContracts, usd } from "@/lib/format";
+import { price, contracts, qToContracts, usd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Badge, EmptyState, MarketAvatar } from "../ui/primitives";
 import { Button } from "../ui/button";
@@ -55,8 +55,8 @@ export function PositionsTable({ account, markets, emptyHint }: { account: Moxie
                   </td>
                   <td className="px-3 py-3"><Badge tone={position.side === "long" ? "long" : "short"}>{position.side === "long" ? "Long · Yes" : "Short · No"}</Badge></td>
                   <td className="px-3 py-3 text-right font-mono">{contracts(qToContracts(position.sizeQ))}</td>
-                  <td className="px-3 py-3 text-right font-mono text-muted">{cents(entryPriceCents(position))}</td>
-                  <td className="px-3 py-3 text-right font-mono">{market ? cents(market.mark) : "—"}</td>
+                  <td className="px-3 py-3 text-right font-mono text-muted">{price(entryPriceCents(position))}</td>
+                  <td className="px-3 py-3 text-right font-mono">{market ? price(market.mark) : "—"}</td>
                   <td className={cn("px-3 py-3 text-right font-mono", pnl === null ? "text-subtle" : pnl >= 0 ? "text-long" : "text-short")}>{pnl === null ? "—" : `${pnl >= 0 ? "+" : ""}${usd(pnl)}`}</td>
                   <td className="px-4 py-3 text-right">
                     {market ? (
@@ -83,7 +83,7 @@ export function PositionsTable({ account, markets, emptyHint }: { account: Moxie
               </div>
               <dl className="grid grid-cols-3 gap-2 text-sm">
                 <div><dt className="text-xs text-subtle">Contracts</dt><dd className="font-mono">{contracts(qToContracts(position.sizeQ))}</dd></div>
-                <div><dt className="text-xs text-subtle">Entry</dt><dd className="font-mono text-muted">{cents(entryPriceCents(position))}</dd></div>
+                <div><dt className="text-xs text-subtle">Entry</dt><dd className="font-mono text-muted">{price(entryPriceCents(position))}</dd></div>
                 <div><dt className="text-xs text-subtle">Est. PnL</dt><dd className={cn("font-mono", pnl === null ? "text-subtle" : pnl >= 0 ? "text-long" : "text-short")}>{pnl === null ? "—" : usd(pnl)}</dd></div>
               </dl>
               {market ? (

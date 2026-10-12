@@ -7,9 +7,9 @@ export function Container({ className, ...props }: ComponentProps<"div">) {
   return <div className={cn("mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8", className)} {...props} />;
 }
 
-/** Flat bordered surface used for every card-like region. */
+/** White card used for every card-like region. */
 export function Panel({ className, ...props }: ComponentProps<"section">) {
-  return <section className={cn("rounded-lg border border-border bg-surface", className)} {...props} />;
+  return <section className={cn("rounded-2xl border border-border bg-surface shadow-[0_1px_2px_rgba(11,16,32,0.04),0_16px_40px_-28px_rgba(11,16,32,0.22)]", className)} {...props} />;
 }
 
 export function PanelHeader({ title, description, action, className }: { title: ReactNode; description?: ReactNode; action?: ReactNode; className?: string }) {
@@ -26,15 +26,15 @@ export function PanelHeader({ title, description, action, className }: { title: 
 
 type BadgeTone = "neutral" | "signal" | "long" | "short" | "warning";
 const badgeTones: Record<BadgeTone, string> = {
-  neutral: "border-border-strong text-muted",
-  signal: "border-signal/40 text-signal",
-  long: "border-long/40 text-long",
-  short: "border-short/40 text-short",
-  warning: "border-warning/40 text-warning",
+  neutral: "border-border bg-surface-2 text-muted",
+  signal: "border-signal/25 bg-signal/8 text-signal",
+  long: "border-long/25 bg-long/8 text-long",
+  short: "border-short/25 bg-short/8 text-short",
+  warning: "border-warning/25 bg-warning/8 text-warning",
 };
 
 export function Badge({ tone = "neutral", className, ...props }: ComponentProps<"span"> & { tone?: BadgeTone }) {
-  return <span className={cn("inline-flex h-5 items-center gap-1 rounded-sm border px-1.5 text-xs font-medium leading-none", badgeTones[tone], className)} {...props} />;
+  return <span className={cn("inline-flex h-5 items-center gap-1 whitespace-nowrap rounded-full border px-2 text-xs font-medium leading-none", badgeTones[tone], className)} {...props} />;
 }
 
 /** Small live indicator dot. */
@@ -91,7 +91,7 @@ const alertTones: Record<AlertTone, { box: string; Icon: typeof Info }> = {
 export function Alert({ tone = "info", title, children, className }: { tone?: AlertTone; title?: ReactNode; children?: ReactNode; className?: string }) {
   const { box, Icon } = alertTones[tone];
   return (
-    <div role={tone === "error" ? "alert" : "status"} className={cn("flex gap-2.5 rounded-md border px-3 py-2.5 text-sm", box, className)}>
+    <div role={tone === "error" ? "alert" : "status"} className={cn("flex gap-2.5 rounded-xl border px-3.5 py-3 text-sm", box, className)}>
       <Icon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
       <div className="min-w-0">
         {title ? <p className="font-medium">{title}</p> : null}
@@ -110,8 +110,8 @@ export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?:
   return (
     <div className="flex flex-col gap-6 py-10 sm:py-14 md:flex-row md:items-end md:justify-between">
       <div className="max-w-2xl">
-        {eyebrow ? <p className="text-xs font-medium uppercase tracking-[0.14em] text-signal">{eyebrow}</p> : null}
-        <h1 className="mt-3 text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">{title}</h1>
+        {eyebrow ? <p className="inline-flex rounded-full bg-foreground px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--accent-on-dark)]">{eyebrow}</p> : null}
+        <h1 className="font-display-condensed mt-4 text-5xl text-foreground sm:text-6xl">{title}</h1>
         {description ? <p className="mt-4 text-base text-muted">{description}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
@@ -123,7 +123,7 @@ export function PageHeader({ eyebrow, title, description, actions }: { eyebrow?:
 export function MarketAvatar({ initials, size = "md", className }: { initials: string; size?: "sm" | "md" | "lg"; className?: string }) {
   const sizeClass = { sm: "size-7 text-xs", md: "size-9 text-xs", lg: "size-11 text-sm" }[size];
   return (
-    <span aria-hidden="true" className={cn("grid shrink-0 place-items-center rounded-md border border-border-strong bg-surface-2 font-semibold tracking-tight text-signal", sizeClass, className)}>
+    <span aria-hidden="true" className={cn("grid shrink-0 place-items-center rounded-xl bg-foreground font-mono font-semibold tracking-tight text-[var(--accent-on-dark)]", sizeClass, className)}>
       {initials}
     </span>
   );
@@ -146,10 +146,10 @@ export function Segmented<T extends string>({
   className?: string;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className={cn("inline-flex rounded-md border border-border bg-surface p-0.5", className)}>
+    <div role="radiogroup" aria-label={label} className={cn("inline-flex rounded-full bg-surface-2 p-1", className)}>
       {options.map((option) => {
         const active = option.value === value;
-        const activeTone = option.tone === "long" ? "bg-long/15 text-long" : option.tone === "short" ? "bg-short/15 text-short" : "bg-surface-3 text-foreground";
+        const activeTone = option.tone === "long" ? "bg-long text-long-foreground shadow-sm" : option.tone === "short" ? "bg-short text-short-foreground shadow-sm" : "bg-surface text-foreground shadow-sm";
         return (
           <button
             key={option.value}
@@ -158,7 +158,7 @@ export function Segmented<T extends string>({
             aria-checked={active}
             onClick={() => onChange(option.value)}
             className={cn(
-              "flex-1 rounded-[5px] font-medium transition-colors duration-150",
+              "flex-1 rounded-full font-medium transition-colors duration-150",
               size === "sm" ? "h-7 px-2.5 text-xs" : "h-9 px-3 text-sm",
               active ? activeTone : "text-subtle hover:text-foreground",
             )}

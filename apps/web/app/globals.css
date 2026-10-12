@@ -1,42 +1,45 @@
 @import "tailwindcss";
+/* A repo-level .gitignore rule ("docs/") hides these folders from automatic source detection. */
+@source "./docs";
+@source "../components/docs";
 
 /*
  * Moxie design tokens. Every color, font, radius and motion value used by the app comes from here;
  * components reference them through Tailwind utilities (bg-surface, text-muted, border-border, …).
- * The palette follows brand.md. The app is dark-only.
+ * Palette: "Cobalt" — cool white base, deep navy ink, one electric-cobalt accent.
  */
 @theme {
-  /* Typography — Geist for display and interface, Geist Mono for numbers only. */
-  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  /* Typography — Mona Sans for display and interface, Geist Mono for numbers only. */
+  --font-sans: var(--font-mona), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, "SFMono-Regular", monospace;
 
-  /* Surfaces, darkest to most elevated. */
-  --color-background: #080a0c;
-  --color-surface: #0d1114;
-  --color-surface-2: #12171b;
-  --color-surface-3: #192025;
-  --color-border: #222a2f;
-  --color-border-strong: #313b41;
+  /* Surfaces, base to most raised. */
+  --color-background: #f6f7fb;
+  --color-surface: #ffffff;
+  --color-surface-2: #eef0f7;
+  --color-surface-3: #e4e7f1;
+  --color-border: #e1e4ee;
+  --color-border-strong: #cdd2e1;
 
   /* Text, strongest to weakest. All pass WCAG AA on background and surfaces. */
-  --color-foreground: #ebe8df;
-  --color-muted: #a3aba9;
-  --color-subtle: #7d8684;
+  --color-foreground: #0b1020;
+  --color-muted: #4a5168;
+  --color-subtle: #6b7289;
 
-  /* Brand and semantic. Signal is the single accent; long/short/warning are semantic only. */
-  --color-signal: #c7ff4a;
-  --color-signal-strong: #d8ff70;
-  --color-signal-foreground: #0b1003;
-  --color-long: #5ae6a8;
-  --color-long-foreground: #04150d;
-  --color-short: #ff6b62;
-  --color-short-foreground: #1c0605;
-  --color-warning: #f4b860;
+  /* Brand and semantic. Signal (cobalt) is the single accent; long/short/warning are semantic only. */
+  --color-signal: #3d3bff;
+  --color-signal-strong: #2b29e0;
+  --color-signal-foreground: #ffffff;
+  --color-long: #0a8f4f;
+  --color-long-foreground: #ffffff;
+  --color-short: #e0392f;
+  --color-short-foreground: #ffffff;
+  --color-warning: #b86e00;
 
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
 
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 
@@ -48,8 +51,13 @@
 }
 
 @layer base {
+  :root {
+    /* Accent that still reads on near-black (arrows on ink buttons, dark panels). */
+    --accent-on-dark: #9b9aff;
+  }
+
   html {
-    color-scheme: dark;
+    color-scheme: light;
     background: var(--color-background);
   }
 
@@ -129,4 +137,90 @@
     background: var(--color-signal);
     border: 3px solid var(--color-background);
   }
+}
+
+/* ---------- Landing page (preview) ---------- */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes rise {
+  from { opacity: 0; transform: translateY(28px); filter: blur(6px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes drift {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+/* Film grain over the whole landing page. */
+.landing-grain {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* Payoff simulator slider: transparent track (drawn underneath), chunky glowing thumb. */
+.sim-range::-webkit-slider-runnable-track { height: 100%; background: transparent; }
+.sim-range::-moz-range-track { height: 100%; background: transparent; }
+.sim-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: 6px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  background: var(--color-foreground);
+  border: 6px solid var(--sim-thumb-border, #0c0f11);
+  box-shadow: 0 0 0 2px var(--color-signal), 0 0 30px color-mix(in srgb, var(--color-signal) 55%, transparent);
+  transition: transform 150ms var(--ease-out);
+}
+.sim-range:active::-webkit-slider-thumb { transform: scale(1.15); }
+.sim-range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: var(--color-foreground);
+  border: 6px solid var(--sim-thumb-border, #0c0f11);
+  box-shadow: 0 0 0 2px var(--color-signal), 0 0 30px color-mix(in srgb, var(--color-signal) 55%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [class*="animate-[rise"], [class*="animate-[drift"] { animation: none !important; }
+}
+
+/* Landing display type: Archivo at its narrowest width, black weight. */
+/* Display type: heavy Mona Sans with tight tracking. Variables let a page fine-tune it. */
+.font-display-condensed {
+  font-family: var(--d-family, var(--font-mona)), ui-sans-serif, sans-serif;
+  font-weight: var(--d-weight, 800);
+  font-stretch: var(--d-stretch, 100%);
+  font-variation-settings: var(--d-variation, normal);
+  text-transform: var(--d-transform, none);
+  letter-spacing: var(--d-tracking, -0.05em);
+  line-height: var(--d-leading, 0.95);
+}
+
+/* Light landing theme: warm white base, near-black ink, lime used as a fill and highlighter.
+   Re-declares the app's colour tokens so every utility inside picks them up. */
+.landing-light {
+  --sim-thumb-border: #ffffff;
+}
+
+/* A dark island inside the light page (the spotlight panel). */
+.landing-dark {
+  color-scheme: dark;
+  --color-signal: var(--accent-on-dark, #c7ff4a);
+  --color-signal-foreground: #0b0d0e;
+  --color-foreground: #ebe8df;
+  --color-muted: #a3aba9;
+  --color-subtle: #7d8684;
+  --color-border: #222a2f;
+  --color-long: #5ae6a8;
+  --color-long-foreground: #04150d;
+  --color-short: #ff6b62;
+  --color-short-foreground: #1c0605;
+  --color-warning: #f4b860;
 }

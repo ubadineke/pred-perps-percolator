@@ -19,9 +19,9 @@ test("summarises 24h change, volume and open interest", () => {
     [price(now - 80_000, "500000"), price(now - 100, "520000")],
     [trade(now - 3_600, "2000000", "510000"), trade(now - 200_000, "9000000", "500000")],
     [
-      portfolio([{ slot: 0, assetIndex: 2, marketId: "3", side: "long", sizeQ: "3000000", entryNotional: "1500000", stale: false }]),
-      portfolio([{ slot: 0, assetIndex: 2, marketId: "3", side: "short", sizeQ: "-3000000", entryNotional: "1500000", stale: false }]),
-      portfolio([{ slot: 0, assetIndex: 1, marketId: "2", side: "long", sizeQ: "5000000", entryNotional: "2500000", stale: false }]),
+      portfolio([{ slot: 0, assetIndex: 2, marketId: "3", side: "long", sizeQ: "3000000", aBasis: "1000000000000000", stale: false }]),
+      portfolio([{ slot: 0, assetIndex: 2, marketId: "3", side: "short", sizeQ: "-3000000", aBasis: "1000000000000000", stale: false }]),
+      portfolio([{ slot: 0, assetIndex: 1, marketId: "2", side: "long", sizeQ: "5000000", aBasis: "1000000000000000", stale: false }]),
     ],
     now,
   );

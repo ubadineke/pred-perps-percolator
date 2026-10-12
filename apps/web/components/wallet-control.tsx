@@ -10,7 +10,8 @@ import { buttonClasses } from "./ui/button";
 import { shortAddress } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-export function WalletControl() {
+/** `sampleAddress` renders a connected button for documentation screenshots only. */
+export function WalletControl({ sampleAddress }: { sampleAddress?: string } = {}) {
   const [open, setOpen] = useState(false);
   const [connecting, setConnecting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +27,7 @@ export function WalletControl() {
     [external.wallets],
   );
   const externalAddress = external.publicKey?.toBase58() ?? null;
-  const activeAddress = externalAddress ?? privy.address;
+  const activeAddress = sampleAddress ?? externalAddress ?? privy.address;
   const activeLabel = externalAddress ? external.wallet?.adapter.name : privy.address ? "Privy" : null;
 
   // Modal behaviour: lock scroll, focus the close button, trap Tab, close on Escape, restore focus.
@@ -111,7 +112,7 @@ export function WalletControl() {
 
       {open ? (
         <div
-          className="fixed inset-0 z-50 grid place-items-end bg-black/70 p-0 backdrop-blur-sm sm:place-items-center sm:p-4"
+          className="fixed inset-0 z-50 grid place-items-end bg-[rgba(11,16,32,0.45)] p-0 backdrop-blur-sm sm:place-items-center sm:p-4"
           role="presentation"
           onMouseDown={(event) => event.target === event.currentTarget && setOpen(false)}
         >

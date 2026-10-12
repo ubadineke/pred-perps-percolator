@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { ExternalLink } from "lucide-react";
 import { getMarketTrades, type ApiTrade } from "@/lib/api";
-import { cents, contracts, e6ToCents, qToContracts, timeAgo } from "@/lib/format";
+import { price as formatPrice, contracts, e6ToCents, qToContracts, timeAgo } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { EmptyState, Skeleton } from "../ui/primitives";
 
@@ -48,7 +48,7 @@ export function RecentFills({ marketAddress, cluster, ownPortfolio }: { marketAd
             >
               <span className={cn("font-medium", long ? "text-long" : "text-short")}>{long ? "Long" : "Short"}</span>
               <span className="font-mono text-foreground">{contracts(size)} <span className="font-sans text-xs text-subtle">contracts</span></span>
-              <span className="font-mono text-muted">{price ? cents(e6ToCents(price)) : "—"}</span>
+              <span className="font-mono text-muted">{price ? formatPrice(e6ToCents(price)) : "—"}</span>
               <span className="flex items-center gap-2 text-xs text-subtle">
                 {own ? <span className="rounded-sm bg-signal/10 px-1.5 py-0.5 font-medium text-signal">You</span> : null}
                 {fill.blockTime ? timeAgo(fill.blockTime) : null}

@@ -33,7 +33,19 @@ export type Market = {
   marketId: string;
   assetIndex: number;
   stats: MarketStats;
+  /** Resolution rules frozen at listing, or null when the indexer has no rule text for this market. */
+  rules: string | null;
+  /** sha256 fingerprints of the title and rules recorded on-chain at listing (hex). */
+  rulesHash: string | null;
+  /** The source market's page, when the provider has one. */
+  sourceUrl: string | null;
+  /** Oracle health reported on-chain. */
+  oracleHealth: OracleHealth;
+  /** Lifecycle schedule in unix seconds (0 when unknown). */
+  schedule: { restrictedAt: number; reduceOnlyAt: number; hardFlatAt: number };
 };
+
+export type OracleHealth = "Healthy" | "Degraded" | "Stale" | "Locked" | "Resolved" | "Unknown";
 
 export type ApiMarket = {
   address: string;
@@ -50,6 +62,12 @@ export type ApiMarket = {
   closeTime: string;
   oracleUpdatedAt: string;
   stats?: MarketStats;
+  rulesHash?: string;
+  titleHash?: string;
+  oracleHealth?: number;
+  restrictedAt?: string;
+  reduceOnlyAt?: string;
+  hardFlatAt?: string;
 };
 
 const INDEX_STALE_AFTER_SECONDS = 10 * 60;
@@ -95,6 +113,12 @@ export function toMarket(x: ApiMarket): Market {
     marketId: x.marketId,
     assetIndex: x.assetIndex,
     stats: x.stats ?? EMPTY_STATS,
+    // Without frozen metadata the indexer falls back to the hash itself; that isn't rule text.
+    rules: x.rules?.trim() && x.rules !== x.rulesHash ? x.rules : null,
+    rulesHash: x.rulesHash ?? null,
+    sourceUrl: source === "panta" && x.providerMarketId ? `https://panta.market/market/${x.providerMarketId}` : null,
+    oracleHealth: (["Unknown", "Healthy", "Degraded", "Stale", "Locked", "Resolved"][x.oracleHealth ?? 0] ?? "Unknown") as OracleHealth,
+    schedule: { restrictedAt: Number(x.restrictedAt) || 0, reduceOnlyAt: Number(x.reduceOnlyAt) || 0, hardFlatAt: Number(x.hardFlatAt) || 0 },
   };
 }
 

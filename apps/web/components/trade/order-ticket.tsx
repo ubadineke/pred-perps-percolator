@@ -6,7 +6,7 @@ import type { MoxieAccount } from "@/hooks/use-moxie-account";
 import type { Market } from "@/lib/markets";
 import { isTradable } from "@/lib/markets";
 import { MatcherCapacityError, freeCollateralUsd, planOrder, quoteMatcher, SLIPPAGE_E6, type ExecutionConfig, type Side } from "@/lib/moxie-client";
-import { cents, contracts, usd } from "@/lib/format";
+import { price, contracts, usd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { AccountGate, TxNoticeView } from "../account/account-gate";
 import { CollateralPanel } from "../account/collateral-panel";
@@ -14,9 +14,9 @@ import { AmountField } from "../ui/amount-field";
 import { Button } from "../ui/button";
 import { Segmented, SummaryRow } from "../ui/primitives";
 
-export function OrderTicket({ market, account, config, matcherData }: { market: Market; account: MoxieAccount; config: ExecutionConfig; matcherData: Uint8Array | null }) {
+export function OrderTicket({ market, account, config, matcherData, initialAmount = "" }: { market: Market; account: MoxieAccount; config: ExecutionConfig; matcherData: Uint8Array | null; initialAmount?: string }) {
   const [side, setSide] = useState<Side>("long");
-  const [amount, setAmount] = useState("");
+  const [amount, setAmount] = useState(initialAmount);
   const [leverage, setLeverage] = useState(1);
   const portfolio = account.portfolio;
   const free = portfolio ? freeCollateralUsd(portfolio) : 0;
@@ -59,7 +59,7 @@ export function OrderTicket({ market, account, config, matcherData }: { market: 
         ]}
       />
 
-      {portfolio ? null : <AccountGate account={account} />}
+      {portfolio ? null : <AccountGate account={account} cluster={config.cluster} />}
 
       {portfolio && !funded ? (
         <div className="space-y-3 rounded-lg border border-dashed border-border-strong p-4">
@@ -105,11 +105,11 @@ export function OrderTicket({ market, account, config, matcherData }: { market: 
 
           <dl className="space-y-2.5 border-y border-border py-4">
             <SummaryRow label="Contracts" value={plan ? contracts(plan.contracts) : "—"} />
-            <SummaryRow label="Est. fill price" value={quote.price !== null ? cents(quote.price) : cents(market.mark)} />
+            <SummaryRow label="Est. fill price" value={quote.price !== null ? price(quote.price) : price(market.mark)} />
             <SummaryRow label="Margin used" value={plan ? usd(plan.marginUsd) : "—"} tone="muted" />
             <SummaryRow label="Fee (0.3%)" value={plan ? usd(plan.feeUsd) : "—"} tone="muted" />
             <SummaryRow
-              label={side === "long" ? "Pays if Yes" : "Pays if No"}
+              label={side === "long" ? "Value at $1.00" : "Value at $0.00"}
               value={plan ? usd(plan.maxPayoutUsd) : "—"}
               tone={side === "long" ? "long" : "short"}
             />
@@ -121,7 +121,7 @@ export function OrderTicket({ market, account, config, matcherData }: { market: 
 
           <p className="flex items-start gap-2 text-xs text-subtle">
             <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-long" aria-hidden="true" />
-            <span>Price-protected: the order fails rather than filling more than {(Number(SLIPPAGE_E6) / 10_000).toFixed(0)}¢ worse than the quote.</span>
+            <span>Price-protected: the order fails rather than filling more than ${(Number(SLIPPAGE_E6) / 1_000_000).toFixed(2)} per contract worse than the quote.</span>
           </p>
         </>
       ) : null}

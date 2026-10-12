@@ -41,6 +41,7 @@ export function buildPermissionlessCrankData(nowSlot: bigint, assets: readonly n
   assets.forEach((a,i)=>{u16(v,10+i*3,a);b[12+i*3]=0});return b;
 }
 export const buildCloseResolvedData = (feeRatePerSlot=0n): Uint8Array => { const b=out(30,17);u128(view(b),1,feeRatePerSlot);return b; };
+/** MoxieHardFlat (tag 71): 1 + 4×u64 + asset u16 + market u64 + reduce u128 = 59 bytes. Tag 69 is RestartAssetOracle. */
 export function buildHardFlatData(aId:bigint,aEpoch:bigint,bId:bigint,bEpoch:bigint,assetIndex:number,marketId:bigint,reduceQ:bigint):Uint8Array{
- const b=out(69,67),v=view(b);let o=1;for(const x of[aId,aEpoch,bId,bEpoch]){u64(v,o,x);o+=8}u16(v,o,assetIndex);o+=2;u64(v,o,marketId);o+=8;u128(v,o,reduceQ);return b;
+ const b=out(71,59),v=view(b);let o=1;for(const x of[aId,aEpoch,bId,bEpoch]){u64(v,o,x);o+=8}u16(v,o,assetIndex);o+=2;u64(v,o,marketId);o+=8;u128(v,o,reduceQ);return b;
 }

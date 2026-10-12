@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ShieldCheck, ShieldAlert } from "lucide-react";
-import { useMoxieAccount } from "@/hooks/use-moxie-account";
+import { useMoxieAccount, type MoxieAccount } from "@/hooks/use-moxie-account";
 import { getMarkets } from "@/lib/api";
 import type { Market } from "@/lib/markets";
 import { freeCollateralUsd, positionPnlUsd, type ExecutionConfig } from "@/lib/moxie-client";
@@ -13,8 +13,9 @@ import { CollateralPanel } from "./collateral-panel";
 import { PositionsTable } from "./positions-table";
 import { Panel, PanelHeader, Stat } from "../ui/primitives";
 
-export function PortfolioView({ config, markets: initialMarkets }: { config: ExecutionConfig; markets: Market[] }) {
-  const account = useMoxieAccount(config);
+export function PortfolioView({ config, markets: initialMarkets, accountOverride }: { config: ExecutionConfig; markets: Market[]; accountOverride?: MoxieAccount }) {
+  const liveAccount = useMoxieAccount(config);
+  const account = accountOverride ?? liveAccount;
   const [markets, setMarkets] = useState(initialMarkets);
 
   useEffect(() => {
@@ -26,7 +27,7 @@ export function PortfolioView({ config, markets: initialMarkets }: { config: Exe
   if (!portfolio) {
     return (
       <div className="max-w-xl">
-        <AccountGate account={account} />
+        <AccountGate account={account} cluster={config.cluster} />
         <div className="mt-4">
           <TxNoticeView notice={account.notice} cluster={config.cluster} onDismiss={account.dismissNotice} />
         </div>
@@ -39,7 +40,7 @@ export function PortfolioView({ config, markets: initialMarkets }: { config: Exe
   const margin = atomsToUsd(portfolio.health.initialRequirement);
   const pnl = portfolio.positions.reduce((sum, position) => {
     const market = markets.find((m) => m.marketId === position.marketId && m.assetIndex === position.assetIndex);
-    return market ? sum + positionPnlUsd(position, market.mark) : sum;
+    return market ? sum + (positionPnlUsd(position, market.mark) ?? 0) : sum;
   }, 0);
   const equity = deposited + pnl;
   const deficit = atomsToUsd(portfolio.health.liquidationDeficit);

@@ -1,8 +1,11 @@
-import { ArrowUpRight } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, ArrowUpRight } from "lucide-react";
 import type { ApiPantaMarket, ApiProviderStatus } from "@/lib/api";
+import { liveSourceMarkets, sourceEligibility } from "@/lib/eligibility";
+import type { Market } from "@/lib/markets";
 import { Badge, EmptyState, LiveDot } from "./ui/primitives";
 
-const probability = (value?: number) => (value === undefined ? "—" : `${(value / 10_000).toFixed(1)}%`);
+const contractPrice = (valueE6?: number) => (valueE6 === undefined ? "—" : `$${(valueE6 / 1_000_000).toFixed(3)}`);
 const volume = (value?: string) => {
   if (!value) return "—";
   const amount = Number(value) / 1_000_000;
@@ -14,58 +17,77 @@ const closesIn = (closeMs: number) => {
   if (remaining <= 0) return "Closed";
   const days = Math.floor(remaining / 86_400_000);
   const hours = Math.floor((remaining % 86_400_000) / 3_600_000);
-  return days ? `${days}d ${hours}h` : `${hours}h`;
+  const minutes = Math.floor((remaining % 3_600_000) / 60_000);
+  return days ? `${days}d ${hours}h` : hours ? `${hours}h ${minutes}m` : `${Math.max(minutes, 1)}m`;
 };
 
-/** Source markets from Panta: reference prices only, not tradable on Moxie until admitted. */
-export function PantaMarketGrid({ markets, status }: { markets: ApiPantaMarket[]; status?: ApiProviderStatus }) {
-  const open = markets.filter((market) => market.status === "open");
+/** Live events on Panta, each labelled with whether it is (or could become) a Moxie perp. */
+export function PantaMarketGrid({ markets, moxieMarkets, status }: { markets: ApiPantaMarket[]; moxieMarkets: Market[]; status?: ApiProviderStatus }) {
+  const live = liveSourceMarkets(markets);
   return (
     <section aria-labelledby="source-heading" className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 id="source-heading" className="text-xl font-semibold tracking-tight">Source markets</h2>
-          <p className="mt-1 text-sm text-muted">Live events on Panta. Reference prices only — a market becomes tradable on Moxie once it’s admitted.</p>
+          <h2 id="source-heading" className="text-xl font-semibold tracking-tight">
+            Source markets <span className="ml-1 text-base font-normal text-subtle">{live.length}</span>
+          </h2>
+          <p className="mt-1 text-sm text-muted">Events still trading on Panta, soonest close first, and whether each can be traded on Moxie.</p>
         </div>
         <span className="inline-flex items-center gap-2 text-xs text-muted">
           <LiveDot tone={status?.stale ? "warning" : "long"} />
           {status?.stale ? "Panta feed delayed" : "Panta feed live"}
         </span>
       </div>
-      {open.length ? (
+      {live.length ? (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {open.map((market) => (
-            <li key={market.providerMarketId} className="flex flex-col rounded-lg border border-border bg-surface p-4">
-              <div className="flex items-center justify-between gap-2">
-                <Badge>{market.category ?? "Event"}</Badge>
-                <span className="text-xs text-subtle">Closes in <span className="font-mono">{closesIn(market.closeTime)}</span></span>
-              </div>
-              <h3 className="mt-3 line-clamp-2 text-sm font-medium leading-snug text-foreground">{market.title}</h3>
-              <dl className="mt-auto grid grid-cols-3 gap-2 pt-4">
-                <div>
-                  <dt className="text-xs text-subtle">Yes</dt>
-                  <dd className="mt-0.5 font-mono text-sm text-long">{probability(market.indexPriceE6)}</dd>
+          {live.map((market) => {
+            const eligibility = sourceEligibility(market, moxieMarkets);
+            return (
+              <li key={market.providerMarketId} className="flex flex-col rounded-lg border border-border bg-surface p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <Badge>{market.category ?? "Event"}</Badge>
+                  <span className="text-xs text-subtle">Closes in <span className="font-mono">{closesIn(market.closeTime)}</span></span>
                 </div>
-                <div>
-                  <dt className="text-xs text-subtle">No</dt>
-                  <dd className="mt-0.5 font-mono text-sm text-short">{market.indexPriceE6 === undefined ? "—" : probability(1_000_000 - market.indexPriceE6)}</dd>
+                <h3 className="mt-3 line-clamp-2 text-sm font-medium leading-snug text-foreground">{market.title}</h3>
+                <dl className="mt-4 grid grid-cols-3 gap-2">
+                  <div>
+                    <dt className="text-xs text-subtle">Yes</dt>
+                    <dd className="mt-0.5 font-mono text-sm text-long">{contractPrice(market.indexPriceE6)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-subtle">No</dt>
+                    <dd className="mt-0.5 font-mono text-sm text-short">{market.indexPriceE6 === undefined ? "—" : contractPrice(1_000_000 - market.indexPriceE6)}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-xs text-subtle">Volume</dt>
+                    <dd className="mt-0.5 font-mono text-sm text-muted">{volume(market.volumeUsdE6)}</dd>
+                  </div>
+                </dl>
+                <div className="mt-auto pt-4">
+                  <div className="border-t border-border pt-3">
+                    <Badge tone={eligibility.tone}>{eligibility.label}</Badge>
+                    <p className="mt-1.5 text-xs leading-5 text-subtle">{eligibility.reason}</p>
+                  </div>
+                  <div className="mt-3 flex items-center gap-4">
+                    {eligibility.market ? (
+                      <Link href={`/trade/${eligibility.market.slug}`} className="inline-flex items-center gap-1 text-xs font-medium text-signal hover:underline">
+                        Trade on Moxie <ArrowRight className="size-3.5" aria-hidden="true" />
+                      </Link>
+                    ) : null}
+                    {market.sourceUrl ? (
+                      <a href={market.sourceUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-muted hover:text-foreground">
+                        View on Panta <ArrowUpRight className="size-3.5" aria-hidden="true" />
+                      </a>
+                    ) : null}
+                  </div>
                 </div>
-                <div>
-                  <dt className="text-xs text-subtle">Volume</dt>
-                  <dd className="mt-0.5 font-mono text-sm text-muted">{volume(market.volumeUsdE6)}</dd>
-                </div>
-              </dl>
-              {market.sourceUrl ? (
-                <a href={market.sourceUrl} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-1 self-start text-xs font-medium text-muted hover:text-foreground">
-                  View on Panta <ArrowUpRight className="size-3.5" aria-hidden="true" />
-                </a>
-              ) : null}
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       ) : (
         <div className="rounded-lg border border-border">
-          <EmptyState title="No open source markets right now" description="Panta’s catalog has no open events at the moment." />
+          <EmptyState title="No live events on Panta right now" description="New source markets appear here as soon as Panta lists them." />
         </div>
       )}
     </section>

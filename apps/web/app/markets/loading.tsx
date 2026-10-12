@@ -5,7 +5,7 @@ export default function Loading() {
   return (
     <AppShell>
       <Container className="pb-16" aria-busy="true">
-        <PageHeader eyebrow="Markets" title="Trade the probability" description="Loading markets…" />
+        <PageHeader eyebrow="Markets" title="What’s your call?" description="Loading markets…" />
         <div className="space-y-2">
           {Array.from({ length: 4 }, (_, i) => (
             <Skeleton key={i} className="h-16 w-full" />

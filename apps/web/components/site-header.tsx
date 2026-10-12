@@ -16,9 +16,10 @@ const links = [
   { href: "/trade", label: "Trade", match: (p: string) => p.startsWith("/trade") },
   { href: "/portfolio", label: "Portfolio", match: (p: string) => p.startsWith("/portfolio") },
   { href: "/technology", label: "Technology", match: (p: string) => p.startsWith("/technology") },
+  { href: "/docs", label: "Docs", match: (p: string) => p.startsWith("/docs") },
 ];
 
-export function SiteHeader({ cluster, marketAuthority }: { cluster: string; marketAuthority?: string }) {
+export function SiteHeader({ cluster, marketAuthority, sampleAddress }: { cluster: string; marketAuthority?: string; sampleAddress?: string }) {
   const path = usePathname() ?? "/";
   const wallet = useWallet();
   const privy = usePrivyWalletState();
@@ -30,7 +31,7 @@ export function SiteHeader({ cluster, marketAuthority }: { cluster: string; mark
   useEffect(() => setOpen(false), [path]);
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/85 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-border bg-white/80 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-6 px-4 sm:px-6">
         <Link href="/" className="rounded-md" aria-label="Moxie home">
           <BrandMark />
@@ -45,8 +46,8 @@ export function SiteHeader({ cluster, marketAuthority }: { cluster: string; mark
                 href={link.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  active ? "text-foreground" : "text-subtle hover:text-foreground",
+                  "rounded-full px-3.5 py-2 text-sm font-medium transition-colors",
+                  active ? "bg-surface-2 text-foreground" : "text-muted hover:bg-surface-2 hover:text-foreground",
                 )}
               >
                 {link.label}
@@ -56,14 +57,14 @@ export function SiteHeader({ cluster, marketAuthority }: { cluster: string; mark
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
-          <span className="hidden items-center gap-2 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted sm:inline-flex">
+          <span className="hidden items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted sm:inline-flex">
             <LiveDot tone="long" />
             {cluster === "devnet" ? "Devnet" : cluster}
           </span>
-          <WalletControl />
+          <WalletControl sampleAddress={sampleAddress} />
           <button
             type="button"
-            className="grid size-10 place-items-center rounded-md text-muted hover:bg-surface-2 hover:text-foreground md:hidden"
+            className="grid size-10 place-items-center rounded-full text-muted hover:bg-surface-2 hover:text-foreground md:hidden"
             aria-label={open ? "Close menu" : "Open menu"}
             aria-expanded={open}
             aria-controls="mobile-nav"
@@ -75,7 +76,7 @@ export function SiteHeader({ cluster, marketAuthority }: { cluster: string; mark
       </div>
 
       {open ? (
-        <nav id="mobile-nav" aria-label="Primary" className="border-t border-border bg-background px-4 pb-4 pt-2 md:hidden">
+        <nav id="mobile-nav" aria-label="Primary" className="border-t border-border bg-surface px-4 pb-4 pt-2 md:hidden">
           {nav.map((link) => {
             const active = link.match(path);
             return (
@@ -83,7 +84,7 @@ export function SiteHeader({ cluster, marketAuthority }: { cluster: string; mark
                 key={link.href}
                 href={link.href}
                 aria-current={active ? "page" : undefined}
-                className={cn("flex h-12 items-center rounded-md px-3 text-base font-medium", active ? "bg-surface-2 text-foreground" : "text-muted")}
+                className={cn("flex h-12 items-center rounded-xl px-3 text-base font-medium", active ? "bg-surface-2 text-foreground" : "text-muted")}
               >
                 {link.label}
               </Link>

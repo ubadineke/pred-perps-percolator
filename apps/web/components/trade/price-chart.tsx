@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
+  AreaSeries,
   CandlestickSeries,
   ColorType,
   CrosshairMode,
@@ -17,11 +18,11 @@ import {
   type UTCTimestamp,
 } from "lightweight-charts";
 import { getMarketChart, type ApiMarketChart, type ChartRange } from "@/lib/api";
-import { cents } from "@/lib/format";
+import { price } from "@/lib/format";
 import { Segmented } from "../ui/primitives";
 
 // Chart colors mirror the theme tokens in globals.css (canvas can't read CSS variables).
-const COLORS = { signal: "#c7ff4a", index: "#7d8684", long: "#5ae6a8", short: "#ff6b62", text: "#7d8684", grid: "rgba(235,232,223,0.04)" };
+const COLORS = { signal: "#3d3bff", signalFill: "rgba(61,59,255,0.16)", index: "#8a90a6", long: "#0a8f4f", short: "#e0392f", text: "#6b7289", grid: "rgba(11,16,32,0.05)" };
 const REFRESH_MS = 10_000;
 const MIN_SPAN_CENTS = 10;
 const ts = (seconds: number) => seconds as UTCTimestamp;
@@ -40,7 +41,7 @@ const RANGES = [
 export function PriceChart({ marketAddress, ownPortfolio }: { marketAddress: string; ownPortfolio?: string }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<{ mark: ISeriesApi<"Line">; index: ISeriesApi<"Line">; candles: ISeriesApi<"Candlestick">; markMarkers: ISeriesMarkersPluginApi<Time>; candleMarkers: ISeriesMarkersPluginApi<Time> } | null>(null);
+  const seriesRef = useRef<{ mark: ISeriesApi<"Area">; index: ISeriesApi<"Line">; candles: ISeriesApi<"Candlestick">; markMarkers: ISeriesMarkersPluginApi<Time>; candleMarkers: ISeriesMarkersPluginApi<Time> } | null>(null);
   const [range, setRange] = useState<ChartRange>("1d");
   const [style, setStyle] = useState<"line" | "candles">("line");
   const [data, setData] = useState<ApiMarketChart | null>(null);
@@ -56,9 +57,9 @@ export function PriceChart({ marketAddress, ownPortfolio }: { marketAddress: str
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderVisible: false, scaleMargins: { top: 0.12, bottom: 0.08 } },
       timeScale: { borderVisible: false, timeVisible: true, secondsVisible: false },
-      localization: { priceFormatter: (value: number) => cents(value) },
+      localization: { priceFormatter: (value: number) => price(value) },
     });
-    // Keep small moves readable, but never show prices outside a probability's 0–100¢.
+    // Keep small moves readable, but never show prices outside the contract's $0–$1 range.
     const autoscaleInfoProvider = (original: () => { priceRange: { minValue: number; maxValue: number } | null } | null) => {
       const result = original();
       if (!result?.priceRange) return result;
@@ -68,7 +69,7 @@ export function PriceChart({ marketAddress, ownPortfolio }: { marketAddress: str
       return { ...result, priceRange: { minValue: Math.max(0, mid - half), maxValue: Math.min(100, mid + half) } };
     };
     const index = chart.addSeries(LineSeries, { color: COLORS.index, lineWidth: 1, lineStyle: LineStyle.Dashed, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false, autoscaleInfoProvider });
-    const mark = chart.addSeries(LineSeries, { color: COLORS.signal, lineWidth: 2, priceLineColor: COLORS.signal, autoscaleInfoProvider });
+    const mark = chart.addSeries(AreaSeries, { lineColor: COLORS.signal, topColor: COLORS.signalFill, bottomColor: "rgba(61,59,255,0)", lineWidth: 2, priceLineColor: COLORS.signal, autoscaleInfoProvider });
     const candles = chart.addSeries(CandlestickSeries, { upColor: COLORS.long, downColor: COLORS.short, wickUpColor: COLORS.long, wickDownColor: COLORS.short, borderVisible: false, visible: false, autoscaleInfoProvider });
     seriesRef.current = { mark, index, candles, markMarkers: createSeriesMarkers(mark, []), candleMarkers: createSeriesMarkers(candles, []) };
     chartRef.current = chart;
@@ -114,7 +115,7 @@ export function PriceChart({ marketAddress, ownPortfolio }: { marketAddress: str
         color: long ? COLORS.long : COLORS.short,
         shape: own ? (long ? "arrowUp" : "arrowDown") : "circle",
         size: own ? 1.2 : 0.5,
-        text: own ? `You ${long ? "long" : "short"} ${fill.size.toFixed(2)} @ ${cents(fill.price)}` : undefined,
+        text: own ? `You ${long ? "long" : "short"} ${fill.size.toFixed(2)} @ ${price(fill.price)}` : undefined,
       };
     });
     series.markMarkers.setMarkers(style === "line" ? markers : []);
@@ -140,7 +141,7 @@ export function PriceChart({ marketAddress, ownPortfolio }: { marketAddress: str
         <Segmented label="Chart range" size="sm" value={range} onChange={setRange} options={RANGES} />
         <div className="flex items-center gap-4">
           <div className="hidden items-center gap-4 text-xs text-subtle sm:flex">
-            <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-3 rounded bg-signal" aria-hidden="true" /> Moxie price</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-0.5 w-3 rounded bg-signal" aria-hidden="true" /> Price</span>
             <span className="inline-flex items-center gap-1.5"><span className="h-px w-3 border-t border-dashed border-subtle" aria-hidden="true" /> Source {lastIndex === undefined ? "(paused)" : ""}</span>
           </div>
           <Segmented

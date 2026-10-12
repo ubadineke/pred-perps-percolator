@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useMemo, useState } from "react";
+import { isListable, MIN_MINUTES_TO_CLOSE } from "@/lib/eligibility";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
 import { ComputeBudgetProgram, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { AlertTriangle, Check, ExternalLink, LockKeyhole, Radio, ShieldCheck } from "lucide-react";
@@ -13,7 +14,7 @@ import { cn } from "@/lib/utils";
 type AdminConfig={adminAddress:string;marketAccount:string;oracleProgramId:string;percolatorProgramId:string;nextAssetIndex:number;nextMarketId:string;cluster:string};
 const encoder=new TextEncoder();
 const short=(value:string)=>value?`${value.slice(0,4)}…${value.slice(-4)}`:"Not configured";
-const probability=(value?:number)=>value===undefined?"—":`${(value/10_000).toFixed(2)}%`;
+const probability=(value?:number)=>value===undefined?"—":`$${(value/1_000_000).toFixed(3)}`;
 const sha256=async(value:string)=>new Uint8Array(await crypto.subtle.digest("SHA-256",encoder.encode(value)));
 const i64=(view:DataView,offset:number,value:bigint)=>view.setBigInt64(offset,value,true);
 const u64=(view:DataView,offset:number,value:bigint)=>view.setBigUint64(offset,value,true);
@@ -35,12 +36,12 @@ export function AdminMarketConsole({markets,config}:{markets:ApiPantaMarket[];co
   const [mark,setMark]=useState(markets[0]?.indexPriceE6??500_000);const [restricted,setRestricted]=useState(30);const [reduceOnly,setReduceOnly]=useState(10);const [hardFlat,setHardFlat]=useState(1);const [liquidityConfirmed,setLiquidityConfirmed]=useState(false);
   const externalAddress=wallet.publicKey?.toBase58()??"";const activeAddress=externalAddress||privy.address||"";
   const authorityMatch=Boolean(externalAddress&&config.adminAddress&&externalAddress===config.adminAddress);
-  const eligible=Boolean(detail&&detail.status==="open"&&detail.closeTime>Date.now()+15*60_000&&detail.indexPriceE6!==undefined&&detail.rules.trim());
+  const eligible=Boolean(detail&&isListable(detail));
   const clockValid=restricted>reduceOnly&&reduceOnly>hardFlat&&hardFlat>0;
   const configured=Boolean(config.adminAddress&&config.marketAccount&&config.oracleProgramId&&config.percolatorProgramId);
   const canActivate=eligible&&clockValid&&configured&&authorityMatch&&liquidityConfirmed&&!loading;
   const checks=useMemo(()=>[
-    [detail?.status==="open","Provider market is open"],[Boolean(detail&&detail.closeTime>Date.now()+15*60_000),"More than 15 minutes to close"],[Boolean(detail?.indexPriceE6&&detail.indexPriceE6<1_000_000),"Valid probability index"],[Boolean(detail?.rules.trim()),"Resolution rules frozen"],[clockValid,"Lock-clock ordering is valid"],[liquidityConfirmed,"Local matcher liquidity confirmed"],
+    [detail?.status==="open","Provider market is open"],[Boolean(detail&&detail.closeTime>Date.now()+MIN_MINUTES_TO_CLOSE*60_000),`More than ${MIN_MINUTES_TO_CLOSE} minutes to close`],[Boolean(detail?.indexPriceE6&&detail.indexPriceE6<1_000_000),"Valid probability index"],[Boolean(detail?.rules.trim()),"Resolution rules frozen"],[clockValid,"Lock-clock ordering is valid"],[liquidityConfirmed,"Local matcher liquidity confirmed"],
   ] as const,[detail,clockValid,liquidityConfirmed]);
 
   useEffect(()=>{if(!selectedId)return;let active=true;setLoading(true);setError("");setSignature("");getPantaMarket(selectedId).then(value=>{if(!active)return;setDetail(value);setMark(value.indexPriceE6??500_000)}).catch(cause=>active&&setError(cause instanceof Error?cause.message:"Could not load provider market.")).finally(()=>active&&setLoading(false));return()=>{active=false}},[selectedId]);

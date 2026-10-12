@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import type { Market } from "@/lib/markets";
-import { cents, centsChange, countdown, usdShort } from "@/lib/format";
+import { price, priceChange, countdown, usdShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Badge, MarketAvatar } from "./ui/primitives";
 
@@ -19,7 +19,7 @@ function changeTone(value: number | null) {
 function IndexCell({ market }: { market: Market }) {
   return (
     <span className="inline-flex items-center gap-1.5" title={market.indexStale ? "Source price has not updated recently" : undefined}>
-      {cents(market.index)}
+      {price(market.index)}
       {market.indexStale ? <span className="text-xs font-sans text-warning">paused</span> : null}
     </span>
   );
@@ -57,8 +57,8 @@ export function MarketTable({ markets }: { markets: Market[] }) {
                     </span>
                   </Link>
                 </td>
-                <td className="px-3 py-4 text-right font-mono font-medium text-foreground">{cents(market.mark)}</td>
-                <td className={cn("px-3 py-4 text-right font-mono", changeTone(market.stats.change24hCents))}>{centsChange(market.stats.change24hCents)}</td>
+                <td className="px-3 py-4 text-right font-mono font-medium text-foreground">{price(market.mark)}</td>
+                <td className={cn("px-3 py-4 text-right font-mono", changeTone(market.stats.change24hCents))}>{priceChange(market.stats.change24hCents, market.mark)}</td>
                 <td className="px-3 py-4 text-right font-mono text-muted"><IndexCell market={market} /></td>
                 <td className="px-3 py-4 text-right font-mono text-muted">{usdShort(market.stats.volume24hUsd)}</td>
                 <td className="px-3 py-4 text-right font-mono text-muted">{usdShort(market.stats.openInterestUsd)}</td>
@@ -88,11 +88,11 @@ export function MarketTable({ markets }: { markets: Market[] }) {
               <dl className="mt-4 grid grid-cols-3 gap-3 border-t border-border pt-3">
                 <div>
                   <dt className="text-xs text-subtle">Price</dt>
-                  <dd className="mt-0.5 font-mono text-sm text-foreground">{cents(market.mark)}</dd>
+                  <dd className="mt-0.5 font-mono text-sm text-foreground">{price(market.mark)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-subtle">24h</dt>
-                  <dd className={cn("mt-0.5 font-mono text-sm", changeTone(market.stats.change24hCents))}>{centsChange(market.stats.change24hCents)}</dd>
+                  <dd className={cn("mt-0.5 font-mono text-sm", changeTone(market.stats.change24hCents))}>{priceChange(market.stats.change24hCents, market.mark)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs text-subtle">Closes in</dt>

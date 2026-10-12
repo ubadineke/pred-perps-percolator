@@ -1,0 +1,18 @@
+{
+  "name": "@moxie/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TypeScript helpers for Moxie: instruction builders, account decoders, order sizing and matcher quotes.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./trading": "./src/trading.ts",
+    "./instructions": "./src/instructions.ts",
+    "./percolator": "./src/percolator.ts",
+    "./accounts": "./src/accounts.ts",
+    "./imported-market": "./src/imported-market.ts"
+  },
+  "files": [
+    "src"
+  ]
+}

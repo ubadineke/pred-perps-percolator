@@ -1,25 +1,29 @@
-// Display formatting shared by every page. Prices are probabilities shown in cents (0–100¢);
-// collateral is USDC with 6 decimals; contract sizes use 1_000_000 q per contract.
+// Display formatting shared by every page. Contract prices are shown in dollars ($0.000–$1.000);
+// internally they are carried as cent numbers (49.2 = $0.492). Collateral is USDC with 6 decimals;
+// contract sizes use 1_000_000 q per contract.
 
 const USDC_DECIMALS = 1_000_000;
 const Q_PER_CONTRACT = 1_000_000;
 
-/** 49.7¢ */
-export function cents(value: number | null | undefined, digits = 1): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-  return `${value.toFixed(digits)}¢`;
+/** Contract price from a cent number: 49.2 → "$0.492". */
+export function price(valueCents: number | null | undefined): string {
+  if (valueCents === null || valueCents === undefined || !Number.isFinite(valueCents)) return "—";
+  return `$${(valueCents / 100).toFixed(3)}`;
 }
 
-/** Probability in E6 (e.g. 497000) → cents number (49.7). */
+/** Price in E6 (e.g. 497000) → cent number (49.7). */
 export function e6ToCents(e6: string | number | bigint): number {
   return Number(e6) / 10_000;
 }
 
-/** +1.2¢ / −0.4¢ — signed change in probability points. */
-export function centsChange(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-  if (value === 0) return "0.0¢";
-  return `${value > 0 ? "+" : "−"}${Math.abs(value).toFixed(1)}¢`;
+/** Relative price change: "+1.0%" / "−0.4%", from a change and the current price (both in cents). */
+export function priceChange(changeCents: number | null | undefined, currentCents: number | null | undefined): string {
+  if (changeCents === null || changeCents === undefined || !Number.isFinite(changeCents)) return "—";
+  if (changeCents === 0) return "0.0%";
+  const before = (currentCents ?? Number.NaN) - changeCents;
+  if (!(before > 0)) return "—";
+  const percent = (changeCents / before) * 100;
+  return `${percent > 0 ? "+" : "−"}${Math.abs(percent).toFixed(1)}%`;
 }
 
 const usdFormatter = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });

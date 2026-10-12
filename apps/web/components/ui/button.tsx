@@ -7,21 +7,21 @@ type Variant = "primary" | "secondary" | "ghost" | "long" | "short" | "outline";
 type Size = "sm" | "md" | "lg" | "icon";
 
 const base =
-  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-md font-medium transition-[background-color,border-color,color,opacity,transform] duration-150 ease-[var(--ease-out)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 select-none";
+  "inline-flex shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-full font-semibold transition-[background-color,border-color,color,opacity,transform] duration-150 ease-[var(--ease-out)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-45 select-none";
 
 const variants: Record<Variant, string> = {
   primary: "bg-signal text-signal-foreground hover:bg-signal-strong",
-  secondary: "bg-surface-3 text-foreground hover:bg-border-strong",
-  outline: "border border-border-strong bg-transparent text-foreground hover:bg-surface-2",
+  secondary: "bg-foreground text-white hover:bg-foreground/85",
+  outline: "border border-border bg-surface text-foreground shadow-sm hover:bg-surface-2",
   ghost: "text-muted hover:bg-surface-2 hover:text-foreground",
-  long: "bg-long text-long-foreground hover:brightness-110",
-  short: "bg-short text-short-foreground hover:brightness-110",
+  long: "bg-long text-long-foreground hover:brightness-95",
+  short: "bg-short text-short-foreground hover:brightness-95",
 };
 
 const sizes: Record<Size, string> = {
-  sm: "h-8 px-3 text-xs",
-  md: "h-10 px-4 text-sm",
-  lg: "h-12 px-5 text-sm",
+  sm: "h-8 px-3.5 text-xs",
+  md: "h-10 px-5 text-sm",
+  lg: "h-12 px-6 text-sm",
   icon: "size-10",
 };
 

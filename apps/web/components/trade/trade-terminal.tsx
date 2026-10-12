@@ -4,30 +4,34 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ChevronDown } from "lucide-react";
-import { useMoxieAccount } from "@/hooks/use-moxie-account";
+import { useMoxieAccount, type MoxieAccount } from "@/hooks/use-moxie-account";
 import { useMatcherData } from "@/hooks/use-matcher";
 import { getMarket, getMarkets } from "@/lib/api";
 import type { Market } from "@/lib/markets";
 import type { ExecutionConfig } from "@/lib/moxie-client";
-import { cents, centsChange, countdown, usdShort } from "@/lib/format";
+import { price, priceChange, countdown, usdShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { PositionsTable } from "../account/positions-table";
 import { Badge, MarketAvatar } from "../ui/primitives";
+import { MarketInfo } from "./market-info";
 import { OrderTicket } from "./order-ticket";
 import { PriceChart } from "./price-chart";
 import { RecentFills } from "./recent-fills";
 
 const REFRESH_MS = 5_000;
 
-export function TradeTerminal({ market: initialMarket, markets: initialMarkets, config }: { market: Market; markets: Market[]; config: ExecutionConfig }) {
+export function TradeTerminal({ market: initialMarket, markets: initialMarkets, config, accountOverride, initialAmount }: { market: Market; markets: Market[]; config: ExecutionConfig; accountOverride?: MoxieAccount; initialAmount?: string }) {
   const [market, setMarket] = useState(initialMarket);
   const [markets, setMarkets] = useState(initialMarkets);
-  const [tab, setTab] = useState<"positions" | "fills">("positions");
-  const account = useMoxieAccount(config);
+  const [tab, setTab] = useState<"positions" | "fills" | "info">("positions");
+  const liveAccount = useMoxieAccount(config);
+  // Docs screenshots pass sample account data; the app always uses the live account.
+  const account = accountOverride ?? liveAccount;
   const matcherData = useMatcherData(config.matcherContext);
 
-  // Keep prices and stats live without a page reload.
+  // Keep prices and stats live without a page reload (not for sample-data captures).
   useEffect(() => {
+    if (accountOverride) return;
     let active = true;
     const load = async () => {
       const [next, list] = await Promise.allSettled([getMarket(initialMarket.address), getMarkets()]);
@@ -40,7 +44,7 @@ export function TradeTerminal({ market: initialMarket, markets: initialMarkets, 
       active = false;
       clearInterval(timer);
     };
-  }, [initialMarket.address]);
+  }, [initialMarket.address, accountOverride]);
 
   const positionCount = account.portfolio?.positions.length ?? 0;
 
@@ -59,19 +63,22 @@ export function TradeTerminal({ market: initialMarket, markets: initialMarkets, 
               Positions {positionCount ? <span className="ml-1.5 rounded-sm bg-surface-3 px-1.5 font-mono text-xs">{positionCount}</span> : null}
             </TabButton>
             <TabButton active={tab === "fills"} onClick={() => setTab("fills")}>Market fills</TabButton>
+            <TabButton active={tab === "info"} onClick={() => setTab("info")}>Rules &amp; source</TabButton>
           </div>
           <div role="tabpanel">
             {tab === "positions" ? (
               <PositionsTable account={account} markets={markets} emptyHint={account.portfolio ? "Open a position with the order ticket." : "Connect and fund a portfolio to trade."} />
-            ) : (
+            ) : tab === "fills" ? (
               <RecentFills marketAddress={market.address} cluster={config.cluster} ownPortfolio={account.portfolio?.address} />
+            ) : (
+              <MarketInfo market={market} cluster={config.cluster} />
             )}
           </div>
         </section>
       </div>
 
       <aside aria-label="Order ticket" className="border-t border-border p-4 sm:p-5 lg:overflow-y-auto lg:border-t-0">
-        <OrderTicket market={market} account={account} config={config} matcherData={matcherData} />
+        <OrderTicket market={market} account={account} config={config} matcherData={matcherData} initialAmount={initialAmount} />
       </aside>
     </div>
   );
@@ -113,8 +120,8 @@ function MarketRail({ markets, activeSlug }: { markets: Market[]; activeSlug: st
                 <span className="min-w-0 flex-1">
                   <span className={cn("line-clamp-2 text-sm leading-snug", active ? "text-foreground" : "text-muted")}>{item.question}</span>
                   <span className="mt-1 flex items-baseline gap-2 font-mono text-xs">
-                    <span className="text-foreground">{cents(item.mark)}</span>
-                    <span className={change === null || change === 0 ? "text-subtle" : change > 0 ? "text-long" : "text-short"}>{centsChange(change)}</span>
+                    <span className="text-foreground">{price(item.mark)}</span>
+                    <span className={change === null || change === 0 ? "text-subtle" : change > 0 ? "text-long" : "text-short"}>{priceChange(change, item.mark)}</span>
                   </span>
                 </span>
               </Link>
@@ -158,13 +165,13 @@ function MarketHeader({ market, markets }: { market: Market; markets: Market[] }
         ) : null}
       </div>
       <dl className="mt-4 grid grid-cols-3 gap-x-4 gap-y-3 sm:grid-cols-6">
-        <HeaderStat label="Price" value={<span className="text-foreground">{cents(market.mark)}</span>} />
-        <HeaderStat label="24h" value={<span className={change === null || change === 0 ? "text-subtle" : change > 0 ? "text-long" : "text-short"}>{centsChange(change)}</span>} />
+        <HeaderStat label="Price" value={<span className="text-foreground">{price(market.mark)}</span>} />
+        <HeaderStat label="24h" value={<span className={change === null || change === 0 ? "text-subtle" : change > 0 ? "text-long" : "text-short"}>{priceChange(change, market.mark)}</span>} />
         <HeaderStat
           label="Source index"
           value={
             <span className="text-muted">
-              {cents(market.index)}
+              {price(market.index)}
               {market.indexStale ? <span className="ml-1 font-sans text-xs text-warning">paused</span> : null}
             </span>
           }

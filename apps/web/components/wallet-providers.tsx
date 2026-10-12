@@ -76,8 +76,8 @@ export function WalletProviders({ children }: { children: ReactNode }) {
       config={{
         loginMethods: ["email", "google"],
         appearance: {
-          theme: "dark",
-          accentColor: "#c7ff4a",
+          theme: "light",
+          accentColor: "#3d3bff",
           walletChainType: "solana-only",
           showWalletLoginFirst: false,
         },

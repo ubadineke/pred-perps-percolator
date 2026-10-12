@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { Keypair, PublicKey, type Transaction } from "@solana/web3.js";
+import { Keypair, LAMPORTS_PER_SOL, PublicKey, type Transaction } from "@solana/web3.js";
 import { getPortfolio, getPortfolioByOwner, NotIndexedError, type ApiPortfolio, type ApiPosition } from "@/lib/api";
 import { friendlyError, type TxAction } from "@/lib/errors";
 import { usdToAtoms } from "@/lib/format";
@@ -40,6 +40,7 @@ export function useMoxieAccount(config: ExecutionConfig) {
   const [portfolio, setPortfolio] = useState<ApiPortfolio | null>(null);
   const [state, setState] = useState<PortfolioState>(address ? "loading" : "disconnected");
   const [walletUsdc, setWalletUsdc] = useState<number | null>(null);
+  const [walletSol, setWalletSol] = useState<number | null>(null);
   const [busy, setBusy] = useState<TxAction | null>(null);
   const [notice, setNotice] = useState<TxNotice | null>(null);
   const pendingPortfolio = useRef<string | null>(null);
@@ -49,6 +50,7 @@ export function useMoxieAccount(config: ExecutionConfig) {
       setPortfolio(null);
       setState("disconnected");
       setWalletUsdc(null);
+      setWalletSol(null);
       return;
     }
     try {
@@ -63,6 +65,11 @@ export function useMoxieAccount(config: ExecutionConfig) {
       } else {
         setState((current) => (current === "ready" ? current : "unavailable"));
       }
+    }
+    try {
+      setWalletSol((await connection.getBalance(new PublicKey(address), "confirmed")) / LAMPORTS_PER_SOL);
+    } catch {
+      // keep the last known balance
     }
     if (config.usdcMint) {
       try {
@@ -144,11 +151,26 @@ export function useMoxieAccount(config: ExecutionConfig) {
         const response = await fetch("/api/devnet/faucet", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ address, amountE6: Number(usdToAtoms(amountUsd)) }),
+          body: JSON.stringify({ address, asset: "usdc", amountE6: Number(usdToAtoms(amountUsd)) }),
         });
         const body = (await response.json()) as { error?: string; signature?: string };
         if (!response.ok) throw new Error(body.error ?? "The devnet faucet is unavailable.");
         return { message: `${amountUsd.toLocaleString()} test USDC sent to your wallet.`, signature: body.signature };
+      }),
+    [address, run],
+  );
+
+  const requestTestSol = useCallback(
+    () =>
+      run("faucet", async () => {
+        const response = await fetch("/api/devnet/faucet", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ address, asset: "sol" }),
+        });
+        const body = (await response.json()) as { error?: string; signature?: string };
+        if (!response.ok) throw new Error(body.error ?? "The devnet faucet is unavailable.");
+        return { message: "0.1 devnet SOL sent to your wallet.", signature: body.signature };
       }),
     [address, run],
   );
@@ -184,8 +206,8 @@ export function useMoxieAccount(config: ExecutionConfig) {
         const quote = quoteMatcher(matcher.data, markE6, sizeQ);
         const signature = await send(tradeTx(config, new PublicKey(address), portfolio, lp, market, sizeQ, limitFor(quote, sizeQ)));
         const side = sizeQ > 0n ? "Long" : "Short";
-        const price = (Number(quote) / 10_000).toFixed(1);
-        return { message: action === "close" ? `Position closed near ${price}¢.` : `${side} filled near ${price}¢.`, signature };
+        const price = `$${(Number(quote) / 1_000_000).toFixed(3)}`;
+        return { message: action === "close" ? `Position closed near ${price}.` : `${side} filled near ${price}.`, signature };
       }),
     [address, config, connection, portfolio, run, send],
   );
@@ -199,12 +221,14 @@ export function useMoxieAccount(config: ExecutionConfig) {
     portfolio,
     state,
     walletUsdc,
+    walletSol,
     busy,
     notice,
     dismissNotice: () => setNotice(null),
     refresh,
     createPortfolio,
     requestTestUsdc,
+    requestTestSol,
     deposit,
     withdraw,
     trade,

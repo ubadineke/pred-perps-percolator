@@ -31,7 +31,7 @@ It also needs the indexer API (`pnpm indexer:start`, default `http://127.0.0.1:8
 - `components/trade/`, `components/account/` — terminal and account features.
 - `hooks/use-moxie-account.ts` — the connected wallet's portfolio, USDC balance and every account action (create, faucet, deposit, withdraw, trade, close), with plain-language errors from `lib/errors.ts`.
 - `lib/moxie-client.ts` — pure transaction builders, matcher quote and margin-aware order sizing.
-- `lib/format.ts` — formatting for cents, USD, contracts, addresses and countdowns.
+- `lib/format.ts` — formatting for contract prices (dollars), USD, contracts, addresses and countdowns.
 
 Brand rules (palette, typography, voice) live in the repo-root `brand.md`.
 

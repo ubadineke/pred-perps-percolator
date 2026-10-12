@@ -1,16 +1,20 @@
 "use client";
 
-import { ExternalLink, Loader2, WalletCards } from "lucide-react";
+import Link from "next/link";
+import { Droplets, ExternalLink, Loader2, WalletCards } from "lucide-react";
 import type { MoxieAccount, TxNotice } from "@/hooks/use-moxie-account";
 import { Alert } from "../ui/primitives";
 import { Button } from "../ui/button";
 import { WalletControl } from "../wallet-control";
 
+// Portfolio rent (~0.067 SOL) plus a little for fees.
+const MIN_SOL_TO_CREATE = 0.08;
+
 /**
  * Renders the single next step a wallet needs before it can trade (connect → create → wait),
  * or nothing once the portfolio exists.
  */
-export function AccountGate({ account }: { account: MoxieAccount }) {
+export function AccountGate({ account, cluster = "devnet" }: { account: MoxieAccount; cluster?: string }) {
   if (!account.configured) {
     return <Alert tone="warning" title="Trading isn’t configured">This deployment is missing its market settings.</Alert>;
   }
@@ -19,6 +23,10 @@ export function AccountGate({ account }: { account: MoxieAccount }) {
       return (
         <GateCard title="Connect a wallet to trade" description="Moxie works with any Solana wallet. Every transaction asks for your approval first.">
           <WalletControl />
+          <p className="text-xs text-subtle">
+            Set your wallet’s network to <span className="font-medium text-muted">Devnet</span>.{" "}
+            <Link href="/docs/getting-started" className="text-muted underline underline-offset-2 hover:text-foreground">New here? Start with the guide</Link>
+          </p>
         </GateCard>
       );
     case "loading":
@@ -27,18 +35,32 @@ export function AccountGate({ account }: { account: MoxieAccount }) {
           <Loader2 className="size-5 animate-spin text-subtle" aria-hidden="true" />
         </GateCard>
       );
-    case "none":
+    case "none": {
+      const needsSol = account.walletSol !== null && account.walletSol < MIN_SOL_TO_CREATE;
       return (
         <GateCard
           icon
           title="Create your trading account"
           description="One portfolio holds your collateral and positions across every market. Setup costs about 0.07 SOL in refundable account rent."
         >
-          <Button className="w-full" loading={account.busy === "create"} onClick={account.createPortfolio}>
+          {needsSol ? (
+            <div className="w-full space-y-2">
+              <p className="text-xs text-warning">
+                Your wallet has {account.walletSol?.toFixed(3)} SOL — you need about {MIN_SOL_TO_CREATE} SOL first.
+              </p>
+              {cluster === "devnet" ? (
+                <Button className="w-full" variant="secondary" loading={account.busy === "faucet"} onClick={account.requestTestSol}>
+                  <Droplets className="size-4" aria-hidden="true" /> Get 0.1 devnet SOL
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
+          <Button className="w-full" disabled={needsSol} loading={account.busy === "create"} onClick={account.createPortfolio}>
             Create portfolio
           </Button>
         </GateCard>
       );
+    }
     case "pending":
       return (
         <GateCard title="Setting up your portfolio…" description="Your portfolio was created. It appears here within a few seconds.">

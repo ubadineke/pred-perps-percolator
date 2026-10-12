@@ -1,9 +1,13 @@
 import { toMarket, type ApiMarket, type Market } from "./markets";
 
-// Client for the Moxie indexer API. Used from server components (MOXIE_API_URL) and from the browser
-// (NEXT_PUBLIC_MOXIE_API_URL, defaulting to the local indexer).
+// Client for the Moxie indexer API. Server components call the indexer directly (MOXIE_API_URL);
+// the browser goes through the app's own /indexer proxy (see next.config.ts), so the site works
+// from any origin — including a tunnel — without exposing the indexer separately.
 
-const base = () => process.env.MOXIE_API_URL ?? process.env.NEXT_PUBLIC_MOXIE_API_URL ?? "http://127.0.0.1:8787";
+const base = () =>
+  typeof window === "undefined"
+    ? (process.env.MOXIE_API_URL ?? "http://127.0.0.1:8787")
+    : (process.env.NEXT_PUBLIC_MOXIE_API_URL ?? "/indexer");
 
 /** The indexer answered, but it does not know this account (e.g. a wallet with no portfolio yet). */
 export class NotIndexedError extends Error {
@@ -28,7 +32,7 @@ export async function getMarket(address: string): Promise<Market> {
   return toMarket(await request<ApiMarket>(`/v1/markets/${encodeURIComponent(address)}`));
 }
 
-export type ApiPosition = { slot: number; assetIndex: number; marketId: string; side: "long" | "short"; sizeQ: string; entryNotional: string; stale: boolean };
+export type ApiPosition = { slot: number; assetIndex: number; marketId: string; side: "long" | "short"; sizeQ: string; aBasis?: string; /** Average entry in E6, derived by the indexer from fills; null when unknown. */ entryPriceE6: string | null; stale: boolean };
 export type ApiHealth = { valid: boolean; equity: string; initialRequirement: string; maintenanceRequirement: string; liquidationDeficit: string; worstCaseLoss: string };
 export type ApiPortfolio = {
   address: string;
@@ -68,7 +72,8 @@ export type ApiPantaMarket = {
   observedAt: number;
 };
 export type ApiProviderStatus = { provider: "panta"; network: "solana-mainnet"; updatedAt: number; stale: boolean; error?: string };
-export const getPantaMarkets = (limit = 12) => request<ApiPantaMarket[]>(`/v1/providers/panta/markets?limit=${limit}`);
+export const getPantaMarkets = (limit = 100, status?: ApiPantaMarket["status"]) =>
+  request<ApiPantaMarket[]>(`/v1/providers/panta/markets?limit=${limit}${status ? `&status=${status}` : ""}`);
 export const getPantaStatus = () => request<ApiProviderStatus>("/v1/providers/panta/status");
 export const getPantaMarket = (id: string) => request<ApiPantaMarket>(`/v1/providers/panta/markets/${encodeURIComponent(id)}`);
 
