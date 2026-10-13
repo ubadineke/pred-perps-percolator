@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { PantaPredictionSource } from "../../../packages/provider-adapter/src/index.ts";
 import { createIndexerApi } from "./api.ts";
 import { MoxieIndexer, type MarketMetadata } from "./indexer.ts";
-import { loadSnapshot, saveSnapshot } from "./persistence.ts";
+import { fileSnapshotStore, postgresSnapshotStore } from "./persistence.ts";
 import { PantaCatalogService } from "./provider-catalog.ts";
 import { SolanaRpcSource } from "./rpc-source.ts";
 
@@ -30,8 +30,10 @@ const source = new SolanaRpcSource(
   [process.env.MOXIE_MATCHER_CONTEXT],
 );
 const indexer = new MoxieIndexer(source, undefined, metadata);
-const snapshot = process.env.INDEXER_SNAPSHOT ?? ".data/moxie-index.json";
-await loadSnapshot(indexer.store, snapshot);
+const snapshotStore = process.env.DATABASE_URL
+  ? await postgresSnapshotStore(process.env.DATABASE_URL)
+  : fileSnapshotStore(process.env.INDEXER_SNAPSHOT ?? ".data/moxie-index.json");
+await snapshotStore.load(indexer.store);
 const metadataByMarketId = new Map(metadata.map((entry) => [entry.providerMarketId, entry]));
 for (const market of indexer.store.markets.values()) {
   const entry = metadataByMarketId.get(market.providerMarketId);
@@ -94,7 +96,7 @@ const sync = async () => {
   syncing = true;
   try {
     await indexer.sync();
-    await saveSnapshot(indexer.store, snapshot);
+    await snapshotStore.save(indexer.store);
   } catch (error) {
     console.error("indexer sync failed; serving the last saved snapshot and retrying", error);
   } finally {

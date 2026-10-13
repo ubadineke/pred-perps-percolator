@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { createServer } from "node:http";
 import { homedir } from "node:os";
 import { ComputeBudgetProgram, Connection, Keypair, PublicKey, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { PantaPredictionSource } from "../../../packages/provider-adapter/src/panta.ts";
@@ -22,7 +23,7 @@ const oracleProgram=new PublicKey(required("MOXIE_ORACLE_PROGRAM_ID")),percolato
 const pantaKey=process.env.PANTA_API_LIVE_KEY?.trim()||process.env.PANTA_API_KEY?.trim();
 const pantaBaseUrl=process.env.PANTA_LIVE_API_BASE_URL?.trim()||"https://live-api.panta.market/api/v1";
 const pausedNotices=new Map<string,string>();
-const connection=new Connection(rpc,"confirmed"),source=new PantaPredictionSource({apiKey:pantaKey,baseUrl:pantaBaseUrl}),secret=JSON.parse(await readFile(process.env.SOLANA_KEYPAIR_PATH??`${homedir()}/.config/solana/id.json`,"utf8")) as number[],reporter=Keypair.fromSecretKey(Uint8Array.from(secret));
+const connection=new Connection(rpc,"confirmed"),source=new PantaPredictionSource({apiKey:pantaKey,baseUrl:pantaBaseUrl}),secret=JSON.parse(process.env.SOLANA_KEYPAIR?.trim()||await readFile(process.env.SOLANA_KEYPAIR_PATH??`${homedir()}/.config/solana/id.json`,"utf8")) as number[],reporter=Keypair.fromSecretKey(Uint8Array.from(secret));
 const [config]=PublicKey.findProgramAddressSync([Buffer.from("config"),marketGroup.toBytes()],oracleProgram);
 
 async function cycle(){
@@ -40,4 +41,7 @@ async function cycle(){
   }
 }
 console.log(`[oracle] reporter=${reporter.publicKey.toBase58()} interval=${interval}ms`);
-for(;;){try{await cycle()}catch(error){console.error("[oracle] cycle:",error instanceof Error?error.message:error)}await sleep(interval)}
+// Hosts that run this as a web service (e.g. Render) need an open port; report liveness on it.
+let lastCycleAt=0;
+if(process.env.PORT)createServer((_,res)=>{res.writeHead(200,{"content-type":"application/json"});res.end(JSON.stringify({service:"oracle-reporter",reporter:reporter.publicKey.toBase58(),lastCycleAt}))}).listen(Number(process.env.PORT),()=>console.log(`[oracle] health on :${process.env.PORT}`));
+for(;;){try{await cycle();lastCycleAt=Date.now()}catch(error){console.error("[oracle] cycle:",error instanceof Error?error.message:error)}await sleep(interval)}
