@@ -29,8 +29,10 @@ const u64 = (value: bigint) => {
 };
 
 async function operator() {
+  // Hosted deployments pass the keypair JSON directly; local runs read the file.
+  const inline = process.env.SOLANA_KEYPAIR?.trim();
   const path = process.env.SOLANA_KEYPAIR_PATH ?? `${homedir()}/.config/solana/id.json`;
-  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(await readFile(path, "utf8")) as number[]));
+  return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(inline || (await readFile(path, "utf8"))) as number[]));
 }
 
 function rateLimited(key: string, cooldownMs: number) {
