@@ -22,7 +22,7 @@ export class PantaCatalogService {
   constructor(source: PantaPredictionSource, options: { ttlMs?: number; maxPages?: number; detailConcurrency?: number } = {}) {
     this.source = source;
     this.ttlMs = options.ttlMs ?? 30_000;
-    this.maxPages = options.maxPages ?? 5;
+    this.maxPages = options.maxPages ?? 20;
     this.detailConcurrency = options.detailConcurrency ?? 3;
   }
 
@@ -96,6 +96,14 @@ export class PantaCatalogService {
         },
       );
       await Promise.all(workers);
+      // Panta intermittently serves stripped records that fail validation. Keep
+      // a still-open market from the previous refresh rather than letting it
+      // flicker out of the catalog for one cycle.
+      const seen = new Set(hydrated.map((market) => market.providerMarketId));
+      const now = Date.now();
+      for (const previous of this.#markets) {
+        if (!seen.has(previous.providerMarketId) && previous.status === "open" && previous.closeTime > now) hydrated.push(previous);
+      }
       this.#markets = hydrated;
       this.#updatedAt = Date.now();
       this.#error = undefined;

@@ -1,0 +1,15 @@
+{
+  "cluster": "devnet",
+  "owner": "G16cv7UtQ27Sa3sg7XsmnfVRnbkcgiWud2JXEVf3EXF4",
+  "marketAccount": "FcfDS1PQrK5A7oQ3VyT5xxWkwC86HxyvTZyMkE2AJNuW",
+  "lpPortfolio": "FvWJ5ZMaivsCV6oXQDCWrDmDP3yqZLnE5dWv2Ah4ut6W",
+  "matcherContext": "4NkQSPBih4VY864hLrKnbiYrZ7eZ1AqdD9ZcA6fv3p9v",
+  "matcherDelegate": "8T4CiBvXYjn56ghMQB9K44wUKD1F3eWVGBA3JdX17DGo",
+  "collateralMint": "GUdcUTZfm6sceusDfasywWJ4bmiWcCU1cRtJoWL8saLo",
+  "collateralDepositedE6": 50000000000,
+  "matcherExpirySlot": 521298180,
+  "portfolioSignature": "4C5ggycfuyE1W44enef7gXUFQ6Q2QcFgYgq84rPRFfXkuiaNszJdBauWZxek2UmHdDjrUAfTYyc2j1qP73rY7hG8",
+  "depositSignature": "2kyS7byExfspWRB3wm2pnaWE4XvCk5T6LsULfoVgzxT6RkW7sbTPpDJWHkyRnDoWkvDHtBT6JdHXuM1zKXodacwr",
+  "matcherSignature": "4bws6C2GZeGqptnpQkGjQwLdDciKUCgUUVpEwys8M5AwhcceVZuVKneen57qhDXdVWQnK4movq6tGufdcDZNkJK2",
+  "bindingSignature": "4Q41DtQDtXKvvaPBRmeRPaxu38j34aBAfrhhr9nC5HMqhixYX9PdaTH6krBD13kyu99U1LqGBEUwEVra1iZ86GVV"
+}

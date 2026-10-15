@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "name": "moxie-panta-binary-14",
+  "quote": {
+    "symbol": "USDC",
+    "decimals": 6,
+    "mint": null
+  },
+  "portfolio": {
+    "maxAssets": 14,
+    "onePerOwner": true
+  },
+  "activation": {
+    "mode": "admin-allowlist",
+    "provider": "panta"
+  },
+  "price": {
+    "decimals": 6,
+    "minimumE6": 1,
+    "maximumE6": 999999,
+    "initialE6": 500000
+  },
+  "risk": {
+    "maintenanceMarginBps": 10000,
+    "initialMarginBps": 10000,
+    "maxTradingFeeBps": 10000,
+    "tradeFeeBaseBps": 30,
+    "liquidationFeeBps": 0,
+    "liquidationFeeCapAtoms": 0,
+    "minLiquidationFeeAtoms": 0,
+    "maxPriceMoveBpsPerSlot": 10000,
+    "maxAbsFundingE9PerSlot": 10000
+  }
+}

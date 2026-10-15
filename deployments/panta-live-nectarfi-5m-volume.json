@@ -1,0 +1,20 @@
+{
+  "fetchedAt": "2026-10-15T09:06:28.228Z",
+  "provider": "panta",
+  "underlyingProvider": "panta",
+  "sourceNetwork": "solana-mainnet",
+  "providerEventId": "89wXZbH7b5JXbfpWAujggNhvGWjtvrSXnbFt8Z2QS5Ec",
+  "providerMarketId": "89wXZbH7b5JXbfpWAujggNhvGWjtvrSXnbFt8Z2QS5Ec",
+  "title": "Will the total trading volume in the ongoing Panta x NectarFi trading competition reach $ 5 million at the end?",
+  "rules": "Resolve YES, if the total trading volume in the ongoing Panta x NectarFi trading competition reaches $5 million at the end on November 12th, 2026. 12:59 am WAT. Announcement on X by @Nectar_Finance and @PantaHQ. Else resolve NO.\n\nSources: world-stocks-yahoo-finance",
+  "yesAssetId": "89wXZbH7b5JXbfpWAujggNhvGWjtvrSXnbFt8Z2QS5Ec:YES",
+  "noAssetId": "89wXZbH7b5JXbfpWAujggNhvGWjtvrSXnbFt8Z2QS5Ec:NO",
+  "closeTimeMs": 1794447000000,
+  "initialMarkE6": 500759,
+  "sourceUrl": "https://panta.market/market/89wXZbH7b5JXbfpWAujggNhvGWjtvrSXnbFt8Z2QS5Ec",
+  "admission": {
+    "status": "candidate",
+    "priceKind": "reference-index",
+    "executableBookVerified": false
+  }
+}

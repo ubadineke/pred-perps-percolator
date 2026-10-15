@@ -1,0 +1,14 @@
+{
+  "cluster": "devnet",
+  "marketAccount": "FcfDS1PQrK5A7oQ3VyT5xxWkwC86HxyvTZyMkE2AJNuW",
+  "oracleConfig": "F7Xmfc3PD9BURCfaFrkq51MpPAxpvtRZiJ2xXRq5eYpq",
+  "record": "9CpcqTa2bSaU1rATixg6gp78YRvvLWMCHR1dJEzj2Uo",
+  "providerMarketId": "GXh9iztJTm5v6qDWnR4YcKHbSc3AUZ2VEMGfKEegd92V",
+  "title": "Will GTA 6 release on November 19th, 2026",
+  "assetIndex": 1,
+  "marketId": 2,
+  "initialMarkE6": 500000,
+  "closeTime": 1795204800,
+  "activationSignature": "3nKSe2kGwDSiyaLMEP63s4Zx2nm6BzhiewwfQf8zdJvYHVre5BsMqzubpLmVNb9Q87ADHPwes4ascKAUkMps2mWS",
+  "observationSignature": "5i36e67MAUzscZZBDn2THP2YohT9vBMgpRuqrAnsWxcHkBe3CtYYfuBqXdka9WkFw4eH6iEW2Rr9Ltjh2cHeP9q5"
+}

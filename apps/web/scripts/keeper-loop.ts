@@ -22,9 +22,12 @@ const program = new PublicKey(required("PERCOLATOR_PROGRAM_ID"));
 const market = new PublicKey(required("MOXIE_MARKET_ACCOUNT"));
 const crankPortfolio = new PublicKey(required("KEEPER_CRANK_PORTFOLIO"));
 const assets = (process.env.KEEPER_ASSETS ?? "1,2").split(",").map((value) => Number(value.trim()));
+const keypairPath = process.env.SOLANA_KEYPAIR_PATH ?? `${homedir()}/.config/solana/id.json`;
 const secret = JSON.parse(
   process.env.SOLANA_KEYPAIR?.trim() ||
-    (await readFile(process.env.SOLANA_KEYPAIR_PATH ?? `${homedir()}/.config/solana/id.json`, "utf8")),
+    (await readFile(keypairPath, "utf8").catch(() => {
+      throw new Error(`SOLANA_KEYPAIR is not set and no keypair file exists at ${keypairPath}`);
+    })),
 ) as number[];
 const payer = Keypair.fromSecretKey(Uint8Array.from(secret));
 const connection = new Connection(rpc, "confirmed");

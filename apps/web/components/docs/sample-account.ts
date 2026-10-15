@@ -56,6 +56,6 @@ export function sampleAccount(stage: "disconnected" | "create" | "fund" | "tradi
     deposit: noop,
     withdraw: noop,
     trade: noop,
-    close: noop,
+    close: async () => null,
   };
 }

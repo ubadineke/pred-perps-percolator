@@ -1,0 +1,14 @@
+{
+  "cluster": "devnet",
+  "marketAccount": "FcfDS1PQrK5A7oQ3VyT5xxWkwC86HxyvTZyMkE2AJNuW",
+  "oracleConfig": "F7Xmfc3PD9BURCfaFrkq51MpPAxpvtRZiJ2xXRq5eYpq",
+  "record": "CM7xCiY3ZhhY77GjHrP8bKyr1tgPSjQCp51jyxzPRFeH",
+  "providerMarketId": "AHAbHQnTZP5MVjroiJ8iv4iCaprDzyqbbZSNMKGXR6r4",
+  "title": "Will @Pdbullbear top the Leaderboard of the NectarFi x Panta trading competition at the end of week 1?",
+  "assetIndex": 6,
+  "marketId": 7,
+  "initialMarkE6": 505880,
+  "closeTime": 1792277940,
+  "activationSignature": "247ugRoUJyhHVwpx1eJA1dLKoFrSx3shtbhxsYuzSjb5wBEj46nYfBmRHwBDmfn36MLWwACHfJUimmLH43Pka2QP",
+  "observationSignature": "6dqEJSzWXi62UPwLEe6H3GgxmtPenqqNxEoxfsr6CZAi6HvAEKp97qnqgwjkjZDkCabMDum8zicdAv7buNYAo1Q"
+}

@@ -1,0 +1,14 @@
+{
+  "cluster": "devnet",
+  "marketAccount": "FcfDS1PQrK5A7oQ3VyT5xxWkwC86HxyvTZyMkE2AJNuW",
+  "oracleConfig": "F7Xmfc3PD9BURCfaFrkq51MpPAxpvtRZiJ2xXRq5eYpq",
+  "record": "2v7CgsQJpE3kfUcYiA3Xp16RtnPuKyTzKpETVAsrbxDp",
+  "providerMarketId": "1P2xG3h3MBtSGSYJonF8oC8MVKCs3JjKGmicmqYQP7M",
+  "title": "Will NectarFi user zuby (@NzubeEzudo on X) crack the top 5 of the Leaderboard in the NectarFi x Panta trading competition at the end of week 1?",
+  "assetIndex": 5,
+  "marketId": 6,
+  "initialMarkE6": 526184,
+  "closeTime": 1792277940,
+  "activationSignature": "3R5P7vM7N465T5e4voz1kgiG7u6453iMtVmCUiKnrgcCaqRZabB8N8wgC1CBiWRQWbuijGKSmz9nGp74BrQebCAk",
+  "observationSignature": "2V4kcou8TciGiG81SReHirzn8Fmrt3onezgqR6fvgA95QodprSiFoaLtNT6tUig4Nnk8Ug4eA7zrowHp8UChyGC8"
+}

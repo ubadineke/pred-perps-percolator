@@ -1,6 +1,8 @@
 "use client";
 
+import { Share2 } from "lucide-react";
 import Link from "next/link";
+import { useState } from "react";
 import type { MoxieAccount } from "@/hooks/use-moxie-account";
 import type { ApiPosition } from "@/lib/api";
 import type { Market } from "@/lib/markets";
@@ -9,15 +11,42 @@ import { price, contracts, qToContracts, usd } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Badge, EmptyState, MarketAvatar } from "../ui/primitives";
 import { Button } from "../ui/button";
+import { ShareDialog } from "./share-dialog";
+import type { ShareCard } from "@/lib/share-card";
 
 type Row = { position: ApiPosition; market?: Market };
+type CardData = Omit<ShareCard, "design" | "handle">;
 
-/** Every open position in the portfolio across markets, with live PnL and a Close action. */
+/** Card data for a position valued at `exitCents`; null without an entry price. */
+function cardFor(position: ApiPosition, market: Market, exitCents: number, status: CardData["status"]): CardData | null {
+  const entryCents = entryPriceCents(position);
+  if (entryCents === null) return null;
+  return { market: market.question, side: position.side, contracts: Math.abs(qToContracts(position.sizeQ)), entryCents, exitCents, status };
+}
+
+/** Every open position in the portfolio across markets, with live PnL, Share and Close actions. */
 export function PositionsTable({ account, markets, emptyHint }: { account: MoxieAccount; markets: Market[]; emptyHint?: string }) {
+  const [sharing, setSharing] = useState<CardData | null>(null);
   const positions = account.portfolio?.positions ?? [];
+  const dialog = sharing ? <ShareDialog card={sharing} onClose={() => setSharing(null)} /> : null;
   if (!positions.length) {
-    return <EmptyState title="No open positions" description={emptyHint ?? "Positions you open appear here, across every market."} />;
+    return (
+      <>
+        <EmptyState title="No open positions" description={emptyHint ?? "Positions you open appear here, across every market."} />
+        {dialog}
+      </>
+    );
   }
+  // After a successful close, offer the realized result as a card.
+  const closeAndOffer = async (market: Market, position: ApiPosition) => {
+    const fillCents = await account.close(market, position);
+    const card = fillCents === null ? null : cardFor(position, market, fillCents, "closed");
+    if (card) setSharing(card);
+  };
+  const shareOpen = (market: Market, position: ApiPosition) => {
+    const card = cardFor(position, market, market.mark, "open");
+    if (card) setSharing(card);
+  };
   const rows: Row[] = positions.map((position) => ({
     position,
     market: markets.find((m) => m.marketId === position.marketId && m.assetIndex === position.assetIndex),
@@ -60,9 +89,14 @@ export function PositionsTable({ account, markets, emptyHint }: { account: Moxie
                   <td className={cn("px-3 py-3 text-right font-mono", pnl === null ? "text-subtle" : pnl >= 0 ? "text-long" : "text-short")}>{pnl === null ? "—" : `${pnl >= 0 ? "+" : ""}${usd(pnl)}`}</td>
                   <td className="px-4 py-3 text-right">
                     {market ? (
-                      <Button size="sm" variant="outline" loading={account.busy === "close"} disabled={account.busy !== null} onClick={() => account.close(market, position)}>
-                        Close
-                      </Button>
+                      <div className="flex justify-end gap-1.5">
+                        <Button size="sm" variant="ghost" aria-label="Share this position" disabled={entryPriceCents(position) === null} onClick={() => shareOpen(market, position)}>
+                          <Share2 className="size-4" aria-hidden="true" />
+                        </Button>
+                        <Button size="sm" variant="outline" loading={account.busy === "close"} disabled={account.busy !== null} onClick={() => closeAndOffer(market, position)}>
+                          Close
+                        </Button>
+                      </div>
                     ) : null}
                   </td>
                 </tr>
@@ -87,14 +121,21 @@ export function PositionsTable({ account, markets, emptyHint }: { account: Moxie
                 <div><dt className="text-xs text-subtle">Est. PnL</dt><dd className={cn("font-mono", pnl === null ? "text-subtle" : pnl >= 0 ? "text-long" : "text-short")}>{pnl === null ? "—" : usd(pnl)}</dd></div>
               </dl>
               {market ? (
-                <Button size="sm" variant="outline" className="w-full" loading={account.busy === "close"} disabled={account.busy !== null} onClick={() => account.close(market, position)}>
-                  Close position
-                </Button>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" className="flex-1" disabled={entryPriceCents(position) === null} onClick={() => shareOpen(market, position)}>
+                    <Share2 className="size-4" aria-hidden="true" />
+                    Share
+                  </Button>
+                  <Button size="sm" variant="outline" className="flex-1" loading={account.busy === "close"} disabled={account.busy !== null} onClick={() => closeAndOffer(market, position)}>
+                    Close position
+                  </Button>
+                </div>
               ) : null}
             </li>
           );
         })}
       </ul>
+      {dialog}
     </>
   );
 }

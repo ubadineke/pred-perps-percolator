@@ -1,0 +1,20 @@
+{
+  "fetchedAt": "2026-10-15T09:06:25.530Z",
+  "provider": "panta",
+  "underlyingProvider": "panta",
+  "sourceNetwork": "solana-mainnet",
+  "providerEventId": "GXh9iztJTm5v6qDWnR4YcKHbSc3AUZ2VEMGfKEegd92V",
+  "providerMarketId": "GXh9iztJTm5v6qDWnR4YcKHbSc3AUZ2VEMGfKEegd92V",
+  "title": "Will GTA 6 release on November 19th, 2026",
+  "rules": "Resolve YES, if If GTA 6 is releasing on any console or PC on November 19th and there are no delays in the actual release.. Else resolve NO.\n\nSources: world-gaming-ign, world-gaming-polygon, world-entertainment-variety",
+  "yesAssetId": "GXh9iztJTm5v6qDWnR4YcKHbSc3AUZ2VEMGfKEegd92V:YES",
+  "noAssetId": "GXh9iztJTm5v6qDWnR4YcKHbSc3AUZ2VEMGfKEegd92V:NO",
+  "closeTimeMs": 1795204800000,
+  "initialMarkE6": 500000,
+  "sourceUrl": "https://panta.market/market/GXh9iztJTm5v6qDWnR4YcKHbSc3AUZ2VEMGfKEegd92V",
+  "admission": {
+    "status": "candidate",
+    "priceKind": "reference-index",
+    "executableBookVerified": false
+  }
+}

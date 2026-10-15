@@ -1,0 +1,20 @@
+{
+  "fetchedAt": "2026-10-15T09:06:26.974Z",
+  "provider": "panta",
+  "underlyingProvider": "panta",
+  "sourceNetwork": "solana-mainnet",
+  "providerEventId": "5fhzcovNvTnWgUMZbPSgFxJwcgRCSFemjiu5DLsvsosT",
+  "providerMarketId": "5fhzcovNvTnWgUMZbPSgFxJwcgRCSFemjiu5DLsvsosT",
+  "title": "Will bitcoin hit $100,000 by 31 Dec 2026",
+  "rules": "Resolve YES, if If Bitcoin is hit $100,00 by December 31, 12:00pm on Coinmarketcap. Else resolve NO.\n\nSources: world-crypto-coinbase, world-crypto-coinmarketcap, world-crypto-coingecko",
+  "yesAssetId": "5fhzcovNvTnWgUMZbPSgFxJwcgRCSFemjiu5DLsvsosT:YES",
+  "noAssetId": "5fhzcovNvTnWgUMZbPSgFxJwcgRCSFemjiu5DLsvsosT:NO",
+  "closeTimeMs": 1798671600000,
+  "initialMarkE6": 500000,
+  "sourceUrl": "https://panta.market/market/5fhzcovNvTnWgUMZbPSgFxJwcgRCSFemjiu5DLsvsosT",
+  "admission": {
+    "status": "candidate",
+    "priceKind": "reference-index",
+    "executableBookVerified": false
+  }
+}

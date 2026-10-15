@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
   // Allow the dev server to be opened through an ngrok tunnel.
   allowedDevOrigins: ["*.ngrok-free.app", "*.ngrok-free.dev", "*.ngrok.app"],
   // Browser requests to /indexer/* are forwarded to the local indexer.
+  // The Technology page was folded into the docs; keep old links working.
+  async redirects() {
+    return [{ source: "/technology", destination: "/docs/how-it-works", permanent: true }];
+  },
   async rewrites() {
     return [{ source: "/indexer/:path*", destination: `${process.env.MOXIE_API_URL ?? "http://127.0.0.1:8787"}/:path*` }];
   },

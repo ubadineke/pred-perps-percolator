@@ -31,7 +31,7 @@ const source = new SolanaRpcSource(
 );
 const indexer = new MoxieIndexer(source, undefined, metadata);
 const snapshotStore = process.env.DATABASE_URL
-  ? await postgresSnapshotStore(process.env.DATABASE_URL)
+  ? await postgresSnapshotStore(process.env.DATABASE_URL, process.env.MOXIE_MARKET_ACCOUNT ?? "default") // one snapshot per market group
   : fileSnapshotStore(process.env.INDEXER_SNAPSHOT ?? ".data/moxie-index.json");
 await snapshotStore.load(indexer.store);
 const metadataByMarketId = new Map(metadata.map((entry) => [entry.providerMarketId, entry]));

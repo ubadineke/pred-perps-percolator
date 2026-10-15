@@ -191,18 +191,30 @@ export class PantaPredictionSource implements MarketSource {
     const observedAt = this.#now();
     const markets: ExternalMarket[] = [];
     for (const value of page.rows) {
+      let market: ExternalMarket;
       try {
-        const market = normalizePantaMarket(value, observedAt);
-        if (filters.status && market.status !== filters.status) continue;
-        if (filters.category && market.category?.toLowerCase() !== filters.category.toLowerCase()) continue;
-        if (filters.query && !`${market.title} ${market.description}`.toLowerCase().includes(filters.query.toLowerCase())) continue;
-        markets.push(market);
+        market = normalizePantaMarket(value, observedAt);
       } catch (error) {
         // A catalog page can contain legacy or partially-created rows. Do not
         // let one invalid summary hide every sound market; getMarket remains
         // strict and admission still requires a valid detailed record.
         if (!(error instanceof TypeError)) throw error;
+        // Live summaries sometimes omit the title even though the detail record
+        // has it; hydrate those instead of dropping a tradable market.
+        const row = value && typeof value === "object" ? (value as JsonRecord) : {};
+        const id = text(row.marketId ?? row.eventPda ?? row.id);
+        const closes = epochMs(row.endTime);
+        if (!id || row.resolved === true || closes === undefined || closes <= observedAt) continue;
+        try {
+          market = await this.getMarket(id);
+        } catch {
+          continue;
+        }
       }
+      if (filters.status && market.status !== filters.status) continue;
+      if (filters.category && market.category?.toLowerCase() !== filters.category.toLowerCase()) continue;
+      if (filters.query && !`${market.title} ${market.description}`.toLowerCase().includes(filters.query.toLowerCase())) continue;
+      markets.push(market);
     }
     return {
       markets: filters.limit ? markets.slice(0, filters.limit) : markets,
@@ -216,7 +228,17 @@ export class PantaPredictionSource implements MarketSource {
 
   async getMarket(id: string): Promise<ExternalMarket> {
     const path = this.#productionEvents ? `/events/${encodeURIComponent(id)}` : `/markets/${encodeURIComponent(id)}/`;
-    return normalizePantaMarket(detail(await this.#json(path)), this.#now());
+    // The live API intermittently serves a stripped record (empty title and
+    // description, about half the fields). Retry a few times before giving up.
+    for (let attempt = 1; ; attempt += 1) {
+      const payload = detail(await this.#json(path));
+      const stripped = typeof payload === "object" && payload !== null && "marketId" in payload && !text((payload as JsonRecord).title);
+      if (stripped && attempt < 4) {
+        await new Promise((resolve) => setTimeout(resolve, 150 * attempt));
+        continue;
+      }
+      return normalizePantaMarket(payload, this.#now());
+    }
   }
 
   async getOrderbook(_id: string): Promise<ExternalOrderbook> {

@@ -2,17 +2,17 @@
   {
     "provider": "jupiter",
     "providerMarketId": "POLY-5041239-0",
-    "title": "Chengdu Open: Hubert Hurkacz vs Denis Shapovalov \u2014 Hubert Hurkacz"
+    "title": "Chengdu Open: Hubert Hurkacz vs Denis Shapovalov — Hubert Hurkacz"
   },
   {
     "provider": "jupiter",
     "providerMarketId": "POLY-5055799-0",
-    "title": "Adana: Elena Ruxandra Bertea vs Lucrezia Stefanini \u2014 Elena Ruxandra Bertea"
+    "title": "Adana: Elena Ruxandra Bertea vs Lucrezia Stefanini — Elena Ruxandra Bertea"
   },
   {
     "provider": "jupiter",
     "providerMarketId": "POLY-5025003-0",
-    "title": "Bari: Matteo Sciahbasi vs Juan Martin \u2014 Matteo Sciahbasi"
+    "title": "Bari: Matteo Sciahbasi vs Juan Martin — Matteo Sciahbasi"
   },
   {
     "provider": "panta",
@@ -31,5 +31,41 @@
     "providerMarketId": "C86nbpSX4ntRWvN4HMrdnhzHjHTtLooNtnw6k7hnmx1F",
     "title": "Saka 7+ points, GW6",
     "rules": "Resolves YES if the official Fantasy Premier League site credits Bukayo Saka with 7 or more points for Gameweek 6, once every match in that gameweek is marked finished and bonus points are final. Resolves NO otherwise.\n\nSources: https://fantasy.premierleague.com/api/bootstrap-static/, https://fantasy.premierleague.com/api/event/6/live/"
+  },
+  {
+    "provider": "panta",
+    "providerMarketId": "GXh9iztJTm5v6qDWnR4YcKHbSc3AUZ2VEMGfKEegd92V",
+    "title": "Will GTA 6 release on November 19th, 2026",
+    "rules": "Resolve YES, if If GTA 6 is releasing on any console or PC on November 19th and there are no delays in the actual release.. Else resolve NO.\n\nSources: world-gaming-ign, world-gaming-polygon, world-entertainment-variety"
+  },
+  {
+    "provider": "panta",
+    "providerMarketId": "5fhzcovNvTnWgUMZbPSgFxJwcgRCSFemjiu5DLsvsosT",
+    "title": "Will bitcoin hit $100,000 by 31 Dec 2026",
+    "rules": "Resolve YES, if If Bitcoin is hit $100,00 by December 31, 12:00pm on Coinmarketcap. Else resolve NO.\n\nSources: world-crypto-coinbase, world-crypto-coinmarketcap, world-crypto-coingecko"
+  },
+  {
+    "provider": "panta",
+    "providerMarketId": "89wXZbH7b5JXbfpWAujggNhvGWjtvrSXnbFt8Z2QS5Ec",
+    "title": "Will the total trading volume in the ongoing Panta x NectarFi trading competition reach $ 5 million at the end?",
+    "rules": "Resolve YES, if the total trading volume in the ongoing Panta x NectarFi trading competition reaches $5 million at the end on November 12th, 2026. 12:59 am WAT. Announcement on X by @Nectar_Finance and @PantaHQ. Else resolve NO.\n\nSources: world-stocks-yahoo-finance"
+  },
+  {
+    "provider": "panta",
+    "providerMarketId": "9C8HiJqpnZDGt3DZBZgg9zG44aVEnJ5RRqwCumnWSMb9",
+    "title": "Will Ral Andrew Take First Place in the ongoing Panta X NectarFi Trading Competion?",
+    "rules": "Resolves YES if: Ral Andrew Finishes in 1st Place on the Leaderboard of the Panta X NectarFi Perps Arena competition when it ends on October 19, 2026, as shown on the NectarFi App. Resolves NO if: Ral Andrew Does not finish in 1st Place on the Pnl Leaderboard when the Panta X Nectarfi Perps Arena Competition ends on October 19, 2026, as shown on the NectarFi App.\n\nSources: https://www.bloomberg.com"
+  },
+  {
+    "provider": "panta",
+    "providerMarketId": "1P2xG3h3MBtSGSYJonF8oC8MVKCs3JjKGmicmqYQP7M",
+    "title": "Will NectarFi user zuby (@NzubeEzudo on X) crack the top 5 of the Leaderboard in the NectarFi x Panta trading competition at the end of week 1?",
+    "rules": "Resolve YES, if NectarFi user zuby (@NzubeEzudo on X) is in the top 5 of the Leaderboard in the NectarFi x Panta trading competition as at 11.59 pm WAT on Saturday October 17th, 2026.  See @PantaHQ and @Nectar_Finance on X for announcements.. Else resolve NO.\n\nSources: world-stocks-ngx, ng-finance-ngx"
+  },
+  {
+    "provider": "panta",
+    "providerMarketId": "AHAbHQnTZP5MVjroiJ8iv4iCaprDzyqbbZSNMKGXR6r4",
+    "title": "Will @Pdbullbear top the Leaderboard of the NectarFi x Panta trading competition at the end of week 1?",
+    "rules": "Resolve YES, if NectarFi user pdbullbear (@Pdbullbear on X) tops the Leaderboard of the NectarFi x Panta trading competition as at 11.59 pm WAT on Saturday October 17th, 2026.  See @PantaHQ and @Nectar_Finance on X for announcements.. Else resolve NO.\n\nSources: world-stocks-ngx, ng-finance-ngx"
   }
 ]

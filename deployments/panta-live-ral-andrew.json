@@ -1,0 +1,20 @@
+{
+  "fetchedAt": "2026-10-15T09:06:22.664Z",
+  "provider": "panta",
+  "underlyingProvider": "panta",
+  "sourceNetwork": "solana-mainnet",
+  "providerEventId": "9C8HiJqpnZDGt3DZBZgg9zG44aVEnJ5RRqwCumnWSMb9",
+  "providerMarketId": "9C8HiJqpnZDGt3DZBZgg9zG44aVEnJ5RRqwCumnWSMb9",
+  "title": "Will Ral Andrew Take First Place in the ongoing Panta X NectarFi Trading Competion?",
+  "rules": "Resolves YES if: Ral Andrew Finishes in 1st Place on the Leaderboard of the Panta X NectarFi Perps Arena competition when it ends on October 19, 2026, as shown on the NectarFi App. Resolves NO if: Ral Andrew Does not finish in 1st Place on the Pnl Leaderboard when the Panta X Nectarfi Perps Arena Competition ends on October 19, 2026, as shown on the NectarFi App.\n\nSources: https://www.bloomberg.com",
+  "yesAssetId": "9C8HiJqpnZDGt3DZBZgg9zG44aVEnJ5RRqwCumnWSMb9:YES",
+  "noAssetId": "9C8HiJqpnZDGt3DZBZgg9zG44aVEnJ5RRqwCumnWSMb9:NO",
+  "closeTimeMs": 1792371600000,
+  "initialMarkE6": 495281,
+  "sourceUrl": "https://panta.market/market/9C8HiJqpnZDGt3DZBZgg9zG44aVEnJ5RRqwCumnWSMb9",
+  "admission": {
+    "status": "candidate",
+    "priceKind": "reference-index",
+    "executableBookVerified": false
+  }
+}

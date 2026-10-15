@@ -1,0 +1,20 @@
+{
+  "fetchedAt": "2026-10-15T09:06:24.033Z",
+  "provider": "panta",
+  "underlyingProvider": "panta",
+  "sourceNetwork": "solana-mainnet",
+  "providerEventId": "1P2xG3h3MBtSGSYJonF8oC8MVKCs3JjKGmicmqYQP7M",
+  "providerMarketId": "1P2xG3h3MBtSGSYJonF8oC8MVKCs3JjKGmicmqYQP7M",
+  "title": "Will NectarFi user zuby (@NzubeEzudo on X) crack the top 5 of the Leaderboard in the NectarFi x Panta trading competition at the end of week 1?",
+  "rules": "Resolve YES, if NectarFi user zuby (@NzubeEzudo on X) is in the top 5 of the Leaderboard in the NectarFi x Panta trading competition as at 11.59 pm WAT on Saturday October 17th, 2026.  See @PantaHQ and @Nectar_Finance on X for announcements.. Else resolve NO.\n\nSources: world-stocks-ngx, ng-finance-ngx",
+  "yesAssetId": "1P2xG3h3MBtSGSYJonF8oC8MVKCs3JjKGmicmqYQP7M:YES",
+  "noAssetId": "1P2xG3h3MBtSGSYJonF8oC8MVKCs3JjKGmicmqYQP7M:NO",
+  "closeTimeMs": 1792277940000,
+  "initialMarkE6": 526184,
+  "sourceUrl": "https://panta.market/market/1P2xG3h3MBtSGSYJonF8oC8MVKCs3JjKGmicmqYQP7M",
+  "admission": {
+    "status": "candidate",
+    "priceKind": "reference-index",
+    "executableBookVerified": false
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "cluster": "devnet",
+  "marketAccount": "FcfDS1PQrK5A7oQ3VyT5xxWkwC86HxyvTZyMkE2AJNuW",
+  "oracleConfig": "F7Xmfc3PD9BURCfaFrkq51MpPAxpvtRZiJ2xXRq5eYpq",
+  "record": "7sXoNPiy4DkgfRVZxqXF7srxZRvQKMEZcU8Xz8brNaBR",
+  "providerMarketId": "9C8HiJqpnZDGt3DZBZgg9zG44aVEnJ5RRqwCumnWSMb9",
+  "title": "Will Ral Andrew Take First Place in the ongoing Panta X NectarFi Trading Competion?",
+  "assetIndex": 4,
+  "marketId": 5,
+  "initialMarkE6": 495281,
+  "closeTime": 1792371600,
+  "activationSignature": "5pixYr2M8npdQkFeJ1kjv1TYQ6dozvTqJriDBwoXktvdJ4bTtQoxEXEZPrJFPDec44c5QexFmdGoLztEssmU3ZxL",
+  "observationSignature": "424gsHcSrSb4LT6YCkVWUtnVNNnChMeMZXzy9oUfTaaSPnoZiURRmCWfLNbpbu2BNwN3EcnWuAs5jegVZeDar4cq"
+}

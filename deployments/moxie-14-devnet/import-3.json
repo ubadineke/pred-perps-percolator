@@ -1,0 +1,14 @@
+{
+  "cluster": "devnet",
+  "marketAccount": "FcfDS1PQrK5A7oQ3VyT5xxWkwC86HxyvTZyMkE2AJNuW",
+  "oracleConfig": "F7Xmfc3PD9BURCfaFrkq51MpPAxpvtRZiJ2xXRq5eYpq",
+  "record": "E2AY55bY1XhtBWQx9xhvM7QtBJLmx42sqBohiPjdmEUs",
+  "providerMarketId": "89wXZbH7b5JXbfpWAujggNhvGWjtvrSXnbFt8Z2QS5Ec",
+  "title": "Will the total trading volume in the ongoing Panta x NectarFi trading competition reach $ 5 million at the end?",
+  "assetIndex": 3,
+  "marketId": 4,
+  "initialMarkE6": 500759,
+  "closeTime": 1794447000,
+  "activationSignature": "5FJwHWpR6WtXf1HD4Qg8Lts8eWwsyoGbdqKrXh3Svnt65BjnNAeuKJBWUHHRGauEE1P9SeX2dKkxzGK2UHTqG1gX",
+  "observationSignature": "5ubrxF9K21UJQQ62zV7sBNxfrLFLjH9fJtbDDJxzwWWbGdKT4HhSTP6XRDGJ3bmPaU6ByaX3yeLQJYTrpuLhKa49"
+}

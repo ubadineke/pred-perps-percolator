@@ -1,0 +1,14 @@
+{
+  "cluster": "devnet",
+  "marketAccount": "FcfDS1PQrK5A7oQ3VyT5xxWkwC86HxyvTZyMkE2AJNuW",
+  "oracleConfig": "F7Xmfc3PD9BURCfaFrkq51MpPAxpvtRZiJ2xXRq5eYpq",
+  "record": "9sSoLThFBoPJZy2oxFVbm4XUiL8P6sKwxEs7ZnkWm6a1",
+  "providerMarketId": "5fhzcovNvTnWgUMZbPSgFxJwcgRCSFemjiu5DLsvsosT",
+  "title": "Will bitcoin hit $100,000 by 31 Dec 2026",
+  "assetIndex": 2,
+  "marketId": 3,
+  "initialMarkE6": 500000,
+  "closeTime": 1798671600,
+  "activationSignature": "4eHfvtZ3B4Ri8XF4kCvbT4BJwbBDotWfg7Ar43oMVME9mjDq5nch8GaeDoWJp7Z44wp28iqJFNYDpFJGSciNC8Pc",
+  "observationSignature": "4AyGMHdYC1paSRxHQfyBrKwyReM98wSmGpDF365LhTodRhECG8e4tzqviEmQsRoADikZf295FRAfKmTPzkKaT6pB"
+}

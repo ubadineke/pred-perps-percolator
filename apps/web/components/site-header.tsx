@@ -15,7 +15,6 @@ const links = [
   { href: "/markets", label: "Markets", match: (p: string) => p === "/markets" },
   { href: "/trade", label: "Trade", match: (p: string) => p.startsWith("/trade") },
   { href: "/portfolio", label: "Portfolio", match: (p: string) => p.startsWith("/portfolio") },
-  { href: "/technology", label: "Technology", match: (p: string) => p.startsWith("/technology") },
   { href: "/docs", label: "Docs", match: (p: string) => p.startsWith("/docs") },
 ];
 

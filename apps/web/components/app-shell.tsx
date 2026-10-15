@@ -25,7 +25,7 @@ function SiteFooter() {
         <nav aria-label="Footer" className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-muted">
           <Link className="hover:text-foreground" href="/markets">Markets</Link>
           <Link className="hover:text-foreground" href="/portfolio">Portfolio</Link>
-          <Link className="hover:text-foreground" href="/technology">How it works</Link>
+          <Link className="hover:text-foreground" href="/docs/how-it-works">How it works</Link>
           <Link className="hover:text-foreground" href="/docs">Docs</Link>
         </nav>
       </div>

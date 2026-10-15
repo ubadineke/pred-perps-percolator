@@ -197,7 +197,7 @@ export function useMoxieAccount(config: ExecutionConfig) {
 
   /** Submits a market order of `sizeQ` (positive = long) with quote-based price protection. */
   const submitOrder = useCallback(
-    async (action: "trade" | "close", market: TradableMarket, sizeQ: bigint) =>
+    async (action: "trade" | "close", market: TradableMarket, sizeQ: bigint, onQuote?: (priceCents: number) => void) =>
       run(action, async () => {
         if (!portfolio) throw new Error("Create a portfolio first.");
         const [lp, matcher] = await Promise.all([getPortfolio(config.lpPortfolio), connection.getAccountInfo(new PublicKey(config.matcherContext), "confirmed")]);
@@ -205,6 +205,7 @@ export function useMoxieAccount(config: ExecutionConfig) {
         const markE6 = BigInt(Math.round(market.mark * 10_000));
         const quote = quoteMatcher(matcher.data, markE6, sizeQ);
         const signature = await send(tradeTx(config, new PublicKey(address), portfolio, lp, market, sizeQ, limitFor(quote, sizeQ)));
+        onQuote?.(Number(quote) / 10_000);
         const side = sizeQ > 0n ? "Long" : "Short";
         const price = `$${(Number(quote) / 1_000_000).toFixed(3)}`;
         return { message: action === "close" ? `Position closed near ${price}.` : `${side} filled near ${price}.`, signature };
@@ -213,7 +214,15 @@ export function useMoxieAccount(config: ExecutionConfig) {
   );
 
   const trade = useCallback((market: TradableMarket, sizeQ: bigint) => submitOrder("trade", market, sizeQ), [submitOrder]);
-  const close = useCallback((market: TradableMarket, position: ApiPosition) => submitOrder("close", market, -BigInt(position.sizeQ)), [submitOrder]);
+  /** Closes a position; resolves to the quoted fill price in cents, or null if the close failed. */
+  const close = useCallback(
+    async (market: TradableMarket, position: ApiPosition): Promise<number | null> => {
+      let fillCents: number | undefined;
+      const ok = await submitOrder("close", market, -BigInt(position.sizeQ), (cents) => (fillCents = cents));
+      return ok ? (fillCents ?? market.mark) : null;
+    },
+    [submitOrder],
+  );
 
   return {
     address,
