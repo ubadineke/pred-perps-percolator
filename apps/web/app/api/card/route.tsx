@@ -100,7 +100,7 @@ function Hero({ card, logoWhite, markWhite }: { card: ShareCard; logoWhite: stri
       <div style={{ marginTop: 56, fontSize: 34, fontWeight: 800, opacity: 0.9 }}>{headline}</div>
       <div style={{ fontSize: 210, fontWeight: 800, letterSpacing: -10, lineHeight: 0.95, marginTop: 6 }}>{signedPct(roiPct)}</div>
       <div style={{ display: "flex", marginTop: 26, fontSize: 26, fontWeight: 500, maxWidth: 1000 }}>
-        {`${card.side === "long" ? "Long" : "Short"} ${card.market} · ${cardPrice(card.entryCents)} → ${cardPrice(card.exitCents)}`}
+        {`${card.side === "long" ? "Long" : "Short"} · ${card.market} · ${cardPrice(card.entryCents)} → ${cardPrice(card.exitCents)}`}
       </div>
       <div style={{ position: "absolute", left: 72, right: 72, bottom: 56, display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: 22 }}>
         <div style={{ ...MONO, display: "flex", height: 44, padding: "0 20px", alignItems: "center", borderRadius: 999, background: "#fff", color: C.cobalt, fontSize: 22 }}>{signedUsd(pnlUsd)}</div>

@@ -13,7 +13,15 @@ export class SolanaRpcSource implements ChainSource{
  readonly marketGroup:string|undefined;
  readonly extraEventAddresses:readonly string[];
  constructor(rpcUrl:string,oracleProgramId:string,percolatorProgramId:string,marketGroup?:string,extraEventAddresses:readonly(string|undefined)[]=[]){this.rpcUrl=rpcUrl;this.oracleProgramId=oracleProgramId;this.percolatorProgramId=percolatorProgramId;this.marketGroup=marketGroup||undefined;this.extraEventAddresses=extraEventAddresses.filter((x):x is string=>Boolean(x))}
- private async rpc<T>(method:string,params:unknown[]):Promise<T>{const response=await fetch(this.rpcUrl,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:++this.id,method,params})});if(!response.ok)throw new Error(`rpc ${method}: ${response.status}`);const body=await response.json() as RpcResult<T>;if(body.error)throw new Error(`rpc ${method}: ${body.error.message}`);return body.result}
+ private async rpc<T>(method:string,params:unknown[]):Promise<T>{
+  // Public and free-tier RPCs rate-limit bursts (HTTP 429); back off and retry rather than failing the whole sync.
+  let response:Response;
+  for(let attempt=0;;attempt++){
+   response=await fetch(this.rpcUrl,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({jsonrpc:"2.0",id:++this.id,method,params})});
+   if(response.status!==429||attempt>=5)break;
+   await new Promise(resolve=>setTimeout(resolve,500*2**attempt));
+  }
+  if(!response.ok)throw new Error(`rpc ${method}: ${response.status}`);const body=await response.json() as RpcResult<T>;if(body.error)throw new Error(`rpc ${method}: ${body.error.message}`);return body.result}
  async getSlot(){return this.rpc<number>("getSlot",[{commitment:"confirmed"}])}
  private async accounts(programId:string,size:number,extraFilters:readonly object[]=[]):Promise<readonly ChainAccount[]>{const result=await this.rpc<any>("getProgramAccounts",[programId,{commitment:"confirmed",encoding:"base64",withContext:true,filters:[{dataSize:size},...extraFilters]}]);const slot=result.context?.slot??await this.getSlot();return result.value.map((x:any)=>({address:x.pubkey,owner:x.account.owner,slot,data:Uint8Array.from(Buffer.from(x.account.data[0],"base64"))}))}
  getImportedMarketAccounts(){return this.accounts(this.oracleProgramId,384,this.marketGroup?[{memcmp:{offset:192,bytes:this.marketGroup}}]:[])}

@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { ArrowRight, ArrowUpRight, Fingerprint, Infinity as InfinityIcon, Layers, ShieldCheck, Sparkles, Zap } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Layers, Share2, ShieldCheck, Sparkles, Zap } from "lucide-react";
 import { BrandMark } from "@/components/brand-mark";
 import { LandingStage } from "@/components/landing-v2/landing-stage";
 import { GlowCard, HeroCoins, PayoffSimulator, Reveal, TiltCard, type SimMarket } from "@/components/landing-v2/interactive";
 import { getMarketChart, getMarkets, type ApiChartPoint } from "@/lib/api";
 import { countdown, price, priceChange, usdShort } from "@/lib/format";
 import { isTradable, type Market } from "@/lib/markets";
+import { shareCardQuery, type CardDesign, type ShareCard } from "@/lib/share-card";
 import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = { title: { absolute: "Moxie — Trade what happens next" } };
@@ -34,7 +35,9 @@ function Marker({ children, className, inline = false }: { children: ReactNode; 
 
 export default async function Home() {
   const markets = await getMarkets().catch(() => [] as Market[]);
-  const live = markets.filter(isTradable).length ? markets.filter(isTradable) : markets;
+  const tradable = markets.filter(isTradable);
+  // Longest-running markets first: they stay relevant on the page longest and span more categories.
+  const live = [...(tradable.length ? tradable : markets)].sort((a, b) => b.closeTime - a.closeTime);
   const histories = await Promise.all(live.slice(0, 3).map((m) => getMarketChart(m.address, "1d").then((c) => c.mark).catch(() => [] as ApiChartPoint[])));
   const featured = live[0];
   const simMarkets: SimMarket[] = live.slice(0, 3).map((m) => ({ slug: m.slug, question: m.question, initials: m.initials, mark: m.mark }));
@@ -79,7 +82,7 @@ export default async function Home() {
           </h1>
 
           <p className="mt-8 max-w-xl animate-[rise_1000ms_var(--ease-out)_360ms_both] text-center text-lg leading-8 text-muted sm:text-xl">
-            Go long or short on football, crypto and culture. Live prices, one balance for every market, and you can exit the second you&rsquo;re right.
+            Go long or short on crypto, culture and live competitions. Live prices, one balance for every market, and you can exit the second you&rsquo;re right.
           </p>
 
           <div className="mt-10 flex animate-[rise_1000ms_var(--ease-out)_480ms_both] flex-wrap justify-center gap-3">
@@ -138,7 +141,7 @@ export default async function Home() {
                 Pick a side.<br />Drag the price.<br /><Marker inline>Watch it pay.</Marker>
               </h2>
               <p className="mt-6 max-w-md text-lg leading-8 text-muted">
-                Every contract trades between $0 and $1 and follows the real-world odds. Think the market&rsquo;s wrong? Go long or short and close whenever you like — no waiting for the final whistle.
+                Every contract trades between $0 and $1 and follows the real-world odds. Think the market&rsquo;s wrong? Go long or short and close whenever you like — no waiting for the result.
               </p>
             </Reveal>
             <Reveal delay={150} className="min-w-0">
@@ -198,7 +201,7 @@ export default async function Home() {
                     <div>
                       <IconChip><Layers className="size-5" aria-hidden="true" /></IconChip>
                       <h3 className="mt-5 text-2xl font-semibold">One balance. Every market.</h3>
-                      <p className="mt-2 max-w-md text-muted">Deposit once and trade football, crypto and culture from the same collateral. No juggling accounts.</p>
+                      <p className="mt-2 max-w-md text-muted">Deposit once and trade every market from the same collateral. No juggling accounts.</p>
                     </div>
                     <div className="flex flex-wrap gap-3">
                       {live.slice(0, 3).map((m) => (
@@ -213,9 +216,8 @@ export default async function Home() {
                 </GlowCard>
               </Reveal>
               <BentoCard delay={80} icon={<Zap className="size-5" aria-hidden="true" />} title="Exit any second" text="No expiry to wait for. Close the moment the price moves your way." big="24/7" />
-              <BentoCard delay={0} icon={<ShieldCheck className="size-5" aria-hidden="true" />} title="Can’t go below zero" text="Every position is fully collateralised. You never lose more than you put in." big="100%" />
-              <BentoCard delay={80} icon={<InfinityIcon className="size-5" aria-hidden="true" />} title="Priced off real odds" text="Prices track the source prediction market, kept in line by funding." big="Live" />
-              <BentoCard delay={160} icon={<Fingerprint className="size-5" aria-hidden="true" />} title="Rules locked on-chain" text="Each market’s resolution rules are fingerprinted on Solana when it lists. Nobody can change them later." big="✓" />
+              <ShareTile markets={live.slice(0, 3)} />
+              <BentoCard delay={80} icon={<ShieldCheck className="size-5" aria-hidden="true" />} title="Can’t go below zero" text="Every position is fully collateralised. You never lose more than you put in." big="100%" />
             </div>
           </div>
         </section>
@@ -281,6 +283,46 @@ function HeroMarketCard({ market, history }: { market: Market; history: ApiChart
         <span className="rounded-xl bg-short/10 py-2 text-center text-short">Short</span>
       </div>
     </Link>
+  );
+}
+
+/** The share-card feature, shown with real renders of the three designs on live markets. */
+function ShareTile({ markets }: { markets: Market[] }) {
+  const designs: CardDesign[] = ["receipt", "hero", "brag"];
+  // Illustrative trades: a 200-contract long that gained 12¢ into each market's current price.
+  const cards = designs.map((design, i) => {
+    const market = markets[i % Math.max(markets.length, 1)];
+    const exitCents = Math.min(95, Math.max(15, market?.mark ?? 60));
+    const card: ShareCard = { design, market: market?.question ?? "Will bitcoin hit $100,000 by 31 Dec 2026", side: "long", contracts: 200, entryCents: exitCents - 12, exitCents, status: "closed" };
+    return { design, src: `/api/card?${shareCardQuery(card)}` };
+  });
+  const placement = ["-rotate-6 -translate-x-[38%] group-hover:-translate-x-[62%] group-hover:-rotate-8", "z-10 -translate-y-2 group-hover:-translate-y-5", "rotate-6 translate-x-[38%] group-hover:translate-x-[62%] group-hover:rotate-8"];
+  return (
+    <Reveal delay={0} className="min-w-0 md:col-span-2">
+      <GlowCard className="h-full">
+        <div className="group flex h-full flex-col gap-8 overflow-hidden p-8">
+          <div>
+            <IconChip><Share2 className="size-5" aria-hidden="true" /></IconChip>
+            <h3 className="mt-5 text-2xl font-semibold">Called it? Prove it.</h3>
+            <p className="mt-2 max-w-md text-muted">Turn any position into a card in one of three designs and post it straight to X.</p>
+          </div>
+          <div className="relative flex h-52 items-center justify-center sm:h-64" aria-hidden="true">
+            {cards.map((card, i) => (
+              // eslint-disable-next-line @next/next/no-img-element -- generated card image
+              <img
+                key={card.design}
+                src={card.src}
+                alt=""
+                width={1200}
+                height={675}
+                loading="lazy"
+                className={cn("absolute aspect-[16/9] w-[58%] max-w-[22rem] rounded-xl border border-black/10 shadow-[0_24px_40px_-20px_rgba(11,16,32,0.45)] transition-transform duration-500 ease-out motion-reduce:transition-none", placement[i])}
+              />
+            ))}
+          </div>
+        </div>
+      </GlowCard>
+    </Reveal>
   );
 }
 

@@ -85,6 +85,12 @@ console.log(`keeper: market=${market.toBase58()} assets=${assets} crank_portfoli
 // Accrual per crank varies (a flat-price segment advances up to max_accrual_dt_slots; an exposed
 // asset's bounded path can advance far less), so learn it from observed progress.
 let advancePerCrank = 16n;
+// Cranks per transaction. Each crank touches every listed asset, so the compute cost grows with
+// the asset count; start conservatively and adapt: halve on a compute-budget overrun, creep back
+// up after clean batches.
+const CRANK_CAP = Number(process.env.KEEPER_MAX_CRANKS ?? 8);
+let maxCranks = Math.max(1, Math.min(CRANK_CAP, Math.floor(16 / Math.max(1, assets.length))));
+let cleanBatches = 0;
 let previous: { slowest: bigint; count: number } | undefined;
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -106,7 +112,7 @@ const tick = async () => {
   // Leave ~one crank of headroom so the batch never reaches the live slot early
   // (a trailing no-op crank reverts the whole batch).
   const raw = Number(lag / advancePerCrank) - 1;
-  const count = Math.min(8, Math.max(1, raw));
+  const count = Math.min(maxCranks, Math.max(1, raw));
   if (process.env.KEEPER_DRY_RUN === "1") {
     console.log(`keeper (dry run): now=${now} current_slot=${currentSlot} slots=${slots} lag=${lag} would send ${count} cranks`);
     return;
@@ -121,12 +127,20 @@ const tick = async () => {
     await connection.confirmTransaction(signature, "confirmed");
     previous = { slowest, count };
     lastCrankAt = Date.now();
+    if (count === maxCranks && ++cleanBatches >= 20 && maxCranks < CRANK_CAP) {
+      maxCranks += 1;
+      cleanBatches = 0;
+    }
     console.log(`keeper: lag=${lag} cranks=${count} advance/crank=${advancePerCrank} sig=${signature.slice(0, 12)}`);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     // A crank with nothing left to do reverts the batch with Custom(22) = 0x16; shrink next time.
     if (/custom program error: 0x16\b|"Custom":22/.test(message)) advancePerCrank *= 2n;
-    else console.error(`keeper: crank failed (lag=${lag}): ${message}`);
+    else if (/exceeded CUs meter|ComputationalBudgetExceeded|Program failed to complete/.test(message) && maxCranks > 1) {
+      maxCranks = Math.max(1, Math.floor(maxCranks / 2));
+      cleanBatches = 0;
+      console.log(`keeper: compute budget exceeded; now ${maxCranks} crank(s) per transaction`);
+    } else console.error(`keeper: crank failed (lag=${lag}): ${message}`);
   }
 };
 
